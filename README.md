@@ -1,102 +1,64 @@
 # Asciixel
 
-使用 C++ 将图片、视频转换为 ASCII 字符画或字符动画的小工具。
+Asciixel is a tool that transforms pixels into asciixels(ASCII pixels)! Now it supports JPG, PNG. More formats will be supported in the future. It can output to terminal or PNG file.
 
-FreeType 2.14.3 通过 Git submodule 管理。克隆时使用 `git clone --recurse-submodules <仓库地址>`；已有工作目录先运行 `git submodule update --init --recursive`，再用 CMake 配置和构建。
+<img src="examples/cat.jpg" width="200" alt="Raw image"/> <img src="examples/cat-ascii.png" width="200" alt="PNG output"/>
 
-**当前状态：已有最小图片入口；下文仍描述后续首版目标。**
+<img src="examples/kant.jpg" width="200" alt="Raw image"/> <img src="examples/kant-ascii.png" width="200" alt="PNGoutput"/>
 
-## 快速开始
+## Quick Start
 
-以下步骤两个平台一致，只有平台相关处单独标出。
+### Build Dependencies
 
-依赖：CMake ≥ 3.16。
+- **Common**: CMake ≥ 3.16, a C/C++ toolchain supporting C++17, and zlib development headers and libraries.
+- **Linux**: GCC/G++ and GNU make.
+  - Debian/Ubuntu: `sudo apt install build-essential cmake zlib1g-dev`
+  - Fedora: `sudo dnf install gcc gcc-c++ make cmake zlib-ng-compat-devel`
+- **Windows**: MinGW-w64 (`gcc`, `g++`, and `make` available in PATH) and Git for Windows (provides Bash).
+  - The MinGW environment must include zlib headers and libraries; nuwen MinGW 19.0 already bundles them.
 
-- **Linux**：g++（C++17）、GNU make、zlib 开发头文件（Debian/Ubuntu 为 `zlib1g-dev`）；缺少 `nasm`/`yasm` 不影响，FFmpeg 配置已关闭汇编优化。
-- **Windows**：MinGW-w64（`gcc`、`make` 在 PATH 中）、Git for Windows（FFmpeg 脚本用其中的 Bash 执行 `configure`）。
-
-### 1. 克隆仓库与子模块
+### 1. Clone the repository and init submodules
 
 ```bash
 git clone --recurse-submodules <仓库地址>
 cd Asciixel
-```
-
-已有工作目录则补齐子模块：
-
-```bash
 git submodule update --init --recursive
 ```
 
-> **仅 Linux**：子模块必须以 LF 行尾检出。若曾在 Windows 上检出再拿到 Linux 构建，三方目录里的 `configure` 会是 CRLF，运行时直接报 `cannot execute: required file not found` 或 `bad variable name`；此时需先在 Linux/WSL 下以 LF 重新检出子模块。
+### 2. Build FFmpeg
 
-### 2. 构建 FFmpeg
-
-脚本参数为并发数（Linux 默认 `nproc`，Windows 默认 4）：
+Use provided scripts to build FFmpeg with only the necessary components. The scripts will download and build FFmpeg in `build/ffmpeg-install`. The default configuration disables all unnecessary features, including network support, and enables only the required decoders and encoders.
 
 ```bash
-./scripts/build-ffmpeg.sh        # Linux，或 ./scripts/build-ffmpeg.sh 8
+./scripts/build-ffmpeg.sh
 ```
 
 ```powershell
-./scripts/build-ffmpeg.ps1       # Windows，或 ./scripts/build-ffmpeg.ps1 8
+./scripts/build-ffmpeg.ps1
 ```
 
-**仅 Linux**：以下是脚本等价的展开命令（从仓库根目录执行），`configure` 参数与脚本一致。
-
-```bash
-FFMPEG_INSTALL="$PWD/build/ffmpeg-install"
-mkdir -p build/ffmpeg && cd build/ffmpeg
-../../third_party/ffmpeg/configure \
-    --prefix="$FFMPEG_INSTALL" \
-    --disable-autodetect --disable-everything \
-    --enable-shared --disable-static \
-    --disable-programs --disable-doc --disable-network \
-    --disable-x86asm \
-    --enable-avformat --enable-avcodec --enable-swscale \
-    --enable-decoder=png,mjpeg --enable-encoder=png \
-    --enable-demuxer=image2,png_pipe,jpeg_pipe \
-    --enable-protocol=file --enable-parser=png,mjpeg \
-    --enable-zlib
-make -j"$(nproc)"
-make install
-cd ../..
-```
-
-产物安装到 `build/ffmpeg-install`（头文件在 `include/`、库在 `lib/`，Windows 另有 `bin/*.dll`），正是 CMake 的默认查找路径，无需额外参数。**仅 Windows**：`make` 需要盘符路径，脚本会自动修补生成的 Makefile。改动配置参数后需重新执行本节。
-
-### 3. 配置并构建项目
+### 3. Configure and build the project
 
 ```bash
 cmake -S . -B build
 cmake --build build --parallel
 ```
 
-### 4. 运行
+### 4. Run
 
 > [!NOTE]
-> You can see some examples pictures on `examples` dir
+> You can see some examples pictures on `examples/`.
 
 ```bash
-./build/asciixel photo.jpg                               # Linux
-./build/asciixel photo.jpg --format png --output art.png # Linux，黑底白字灰度 PNG
+./build/asciixel <photo-path>                                    # to terminal
+./build/asciixel <photo-path> --format png --output <output.png> # to PNG file
 
 # test for terminal output
 # it will use the pictures in directory examples
-bash examples/test.sh
+bash examples/test.sh # Linux
 ```
 
-```powershell
-./build/asciixel.exe photo.jpg                               # Windows
-./build/asciixel.exe photo.jpg --format png --output art.png # Windows，黑底白字灰度 PNG
-```
-
-- **Linux**：默认字体 `/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf`，缺失时报错，可安装 `fonts-dejavu-core`；程序依赖 `build/ffmpeg-install/lib` 下的共享库，正常从构建目录运行即可，若提示找不到 `libavformat.so`，用 `LD_LIBRARY_PATH="$PWD/build/ffmpeg-install/lib"` 指定。
-- **Windows**：默认字体 `C:/Windows/Fonts/consola.ttf`；CMake 会把 `build/ffmpeg-install/bin` 下的 DLL 复制到可执行文件旁，无需设置 PATH。
-
-> 字体也可以通过修改 `src/main.cpp` 中第 **28** 行的路径进行修正， 修改之后重新编译即可
-
-运行测试：`ctest --test-dir build`（字体相关用例仅在 Windows 上注册）。
+Currently, the program uses a default font path(Linux: `/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf`, Windows: `C:/Windows/Fonts/consola.ttf`) and size. If the font is missing, it will report an error. You can install the required font or modify the font path in `src/main.cpp` and recompile. However the project will remove the hard-coded font path in the future.
 
 ## 当前可运行入口
 
