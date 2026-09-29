@@ -65,11 +65,14 @@ Config buildConfig(const ConfigValues& values)
 
         if (option == "font") {
             config.charset.font_path = *value;
-        } else if (option == "font-size") {
+        }
+        else if (option == "font-size") {
             config.charset.pixel_size = parseInteger<unsigned>(*value, option);
-        } else if (option == "columns") {
+        }
+        else if (option == "columns") {
             config.sampling.columns = parseInteger<std::size_t>(*value, option);
-        } else {
+        }
+        else {
             throw std::invalid_argument("Unknown option: " + option);
         }
     }

@@ -56,7 +56,8 @@ ParseResult parseArguments(const std::vector<std::string>& args)
         if (equals != std::string::npos) {
             // Preserve empty values and any subsequent '=' for the builder.
             parsed.options.emplace(key, arg.substr(equals + 1));
-        } else {
+        }
+        else {
             // Negative numeric values are left for configuration validation.
             const bool next_is_option = i + 1 < args.size() &&
                 args[i + 1].size() > 1 && args[i + 1][0] == '-' &&
