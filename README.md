@@ -74,9 +74,16 @@ cmake --build build --parallel
 
 ### 4. 运行
 
+> [!NOTE]
+> You can see some examples pictures on `examples` dir
+
 ```bash
 ./build/asciixel photo.jpg                               # Linux
 ./build/asciixel photo.jpg --format png --output art.png # Linux，黑底白字灰度 PNG
+
+# test for terminal output
+# it will use the pictures in directory examples
+bash examples/test.sh
 ```
 
 ```powershell
@@ -86,6 +93,8 @@ cmake --build build --parallel
 
 - **Linux**：默认字体 `/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf`，缺失时报错，可安装 `fonts-dejavu-core`；程序依赖 `build/ffmpeg-install/lib` 下的共享库，正常从构建目录运行即可，若提示找不到 `libavformat.so`，用 `LD_LIBRARY_PATH="$PWD/build/ffmpeg-install/lib"` 指定。
 - **Windows**：默认字体 `C:/Windows/Fonts/consola.ttf`；CMake 会把 `build/ffmpeg-install/bin` 下的 DLL 复制到可执行文件旁，无需设置 PATH。
+
+> 字体也可以通过修改 `src/main.cpp` 中第 **28** 行的路径进行修正， 修改之后重新编译即可
 
 运行测试：`ctest --test-dir build`（字体相关用例仅在 Windows 上注册）。
 
