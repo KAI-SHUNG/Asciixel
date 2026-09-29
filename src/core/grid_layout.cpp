@@ -8,7 +8,7 @@
 namespace asciixel {
 
 GridSize calculateGrid(std::size_t image_width, std::size_t image_height,
-                       const SamplingConfig& config, const GlyphLayout& layout)
+                       const SampleConfig& config, const GlyphLayout& layout)
 {
     if (image_width == 0 || image_height == 0 || config.columns == 0 ||
         layout.cell_width == 0 || layout.cell_height == 0) {

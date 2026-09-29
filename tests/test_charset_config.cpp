@@ -1,7 +1,5 @@
-#include "asciixel/config/charset_config.hpp"
+#include "asciixel/config/asciixel_config.hpp"
 
-#include <filesystem>
-#include <fstream>
 #include <stdexcept>
 #include <string>
 
@@ -14,34 +12,22 @@ void require(bool condition)
     }
 }
 
-void roundTripPreservesCandidates()
+void acceptsValidCandidates()
 {
-    const std::filesystem::path path = "test-charset-config.cfg";
     const asciixel::CharsetConfig original{
         "C:/fonts/Maple Mono.ttf", 24, " =#\\'\""};
-    original.save(path.string());
-
-    const auto loaded = asciixel::CharsetConfig::load(path.string());
-    require(loaded.font_path == original.font_path);
-    require(loaded.pixel_size == original.pixel_size);
-    require(loaded.candidates == original.candidates);
-    std::filesystem::remove(path);
+    original.validate();
 }
 
 void rejectsMissingSpace()
 {
-    const std::filesystem::path path = "test-charset-config-invalid.cfg";
-    {
-        std::ofstream file(path);
-        file << "font_path=font.ttf\npixel_size=24\ncandidates=#@\n";
-    }
+    const asciixel::CharsetConfig config{"font.ttf", 24, "#@"};
     bool rejected = false;
     try {
-        asciixel::CharsetConfig::load(path.string());
+        config.validate();
     } catch (const std::invalid_argument&) {
         rejected = true;
     }
-    std::filesystem::remove(path);
     require(rejected);
 }
 
@@ -49,6 +35,6 @@ void rejectsMissingSpace()
 
 int main()
 {
-    roundTripPreservesCandidates();
+    acceptsValidCandidates();
     rejectsMissingSpace();
 }

@@ -1,7 +1,7 @@
 #ifndef CHARSET_BUILDER_HPP
 #define CHARSET_BUILDER_HPP
 
-#include "asciixel/config/charset_config.hpp"
+#include "asciixel/config/asciixel_config.hpp"
 #include "asciixel/model/rasterized_charset.hpp"
 
 namespace asciixel {

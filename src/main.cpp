@@ -64,7 +64,7 @@ void convertImage(const std::string& path, const std::string& output)
     const asciixel::ImageFrame        image = asciixel::loadImage(path);
     const asciixel::RasterizedCharset charset =
         asciixel::CharsetBuilder::buildCharset(defaultCharsetConfig());
-    const asciixel::SamplingConfig sampling_config;
+    const asciixel::SampleConfig sampling_config;
     const asciixel::GridSize       grid =
         asciixel::calculateGrid(image.width, image.height, sampling_config, charset.layout);
     const asciixel::SampledFrame sampled =

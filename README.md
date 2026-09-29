@@ -66,7 +66,7 @@ Currently, the program uses a default font path(Linux: `/usr/share/fonts/truetyp
 
 黑底白字 PNG 导出：`./build/asciixel.exe photo.jpg --format png --output art.png`，构建步骤见上文快速开始。已有 FFmpeg 构建也需重新执行脚本，以启用 PNG 编码器。PNG 输出为不透明的 8 位灰度图，保留字体抗锯齿；尺寸为字符列数 × 格子宽度、字符行数 × 格子高度。单张输出像素缓冲区限制为 256 MiB。`--output` 仅用于 PNG，必须指定文件路径（不支持 `-`），拒绝覆盖已有文件，支持中文路径。默认或 `--format terminal` 仍输出文本到 stdout。
 
-输出列数为 `min(原图宽度, SamplingConfig.columns)`，默认配置为 200 列，目前尚未接入命令行参数。行数为 `max(1, round(列数 × 原图高度 / 原图宽度 × 字符格宽度 / 字符格高度))`，字符格尺寸由实际字体和字号确定。小图不增加列数，行数没有 200 的上限。
+输出列数为 `min(原图宽度, SampleConfig.columns)`，默认配置为 200 列，目前尚未接入命令行参数。行数为 `max(1, round(列数 × 原图高度 / 原图宽度 × 字符格宽度 / 字符格高度))`，字符格尺寸由实际字体和字号确定。小图不增加列数，行数没有 200 的上限。
 
 `CharsetBuilder` 根据 `CharsetConfig` 构建 `RasterizedCharset`，保存统一格子布局、基线原点，以及每个字符的原始灰度位图、偏移和覆盖率。匹配阶段将覆盖率归一化后选字。当前处理链路为 `ImageFrame → SampledFrame → AsciiFrame`，随后输出文本，或由 `core/ascii_renderer` 生成 `GrayBitmap`，交给 `io/png_writer` 编码保存。渲染接口不暴露 FFmpeg 类型。
 

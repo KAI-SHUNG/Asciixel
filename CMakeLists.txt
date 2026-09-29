@@ -25,7 +25,7 @@ add_library(asciixel_core STATIC
 	src/core/glyph_matcher.cpp
 	src/core/grid_layout.cpp
 	src/core/ascii_renderer.cpp
-	src/config/charset_config.cpp
+	src/config/asciixel_config.cpp
 	src/io/image_loader.cpp
 	src/io/frame_converter.cpp
 	src/io/png_writer.cpp
