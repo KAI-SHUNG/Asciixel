@@ -2,12 +2,22 @@
 
 namespace asciixel {
 
+/**
+ * @brief Parse CLI tokens into canonical options and positional arguments.
+ *
+ * @param args UTF-8 argument strings excluding the executable name.
+ *
+ * @return Parsed arguments or a syntax error; values remain unvalidated text.
+ */
 ParseResult parseArguments(const std::vector<std::string>& args)
 {
+    // Track whether the explicit option terminator has been consumed.
     ParsedArguments parsed;
     bool options_ended = false;
     for (std::size_t i = 0; i < args.size(); ++i) {
         const auto& arg = args[i];
+
+        // Preserve positional tokens, including everything following '--'.
         if (!options_ended && arg == "--") {
             options_ended = true;
             continue;
@@ -16,6 +26,8 @@ ParseResult parseArguments(const std::vector<std::string>& args)
             parsed.positional.push_back(arg);
             continue;
         }
+
+        // Split inline values and normalize supported aliases.
         const auto equals = arg.find('=');
         const auto name = arg.substr(0, equals);
         std::string key;
@@ -26,6 +38,7 @@ ParseResult parseArguments(const std::vector<std::string>& args)
         else if (name == "--columns") key = "columns";
         else return ParseError{"Unknown option: " + name};
 
+        // Help is a standalone request rather than a conversion option.
         if (key == "help") {
             if (equals != std::string::npos)
                 return ParseError{"Help does not accept a value"};
@@ -34,12 +47,17 @@ ParseResult parseArguments(const std::vector<std::string>& args)
             parsed.help = true;
             continue;
         }
+
+        // Reject duplicates after alias normalization.
         if (parsed.options.count(key))
             return ParseError{"Repeated option: " + name};
+
+        // Accept inline values or consume the next non-option token.
         if (equals != std::string::npos) {
             // Preserve empty values and any subsequent '=' for the builder.
             parsed.options.emplace(key, arg.substr(equals + 1));
         } else {
+            // Negative numeric values are left for configuration validation.
             const bool next_is_option = i + 1 < args.size() &&
                 args[i + 1].size() > 1 && args[i + 1][0] == '-' &&
                 (args[i + 1][1] < '0' || args[i + 1][1] > '9');
@@ -53,9 +71,15 @@ ParseResult parseArguments(const std::vector<std::string>& args)
             parsed.options.emplace(key, args[++i]);
         }
     }
+
     return parsed;
 }
 
+/**
+ * @brief Describe the supported CLI syntax and default option values.
+ *
+ * @return Static null-terminated help text; the caller does not own it.
+ */
 const char* argumentHelp()
 {
     return "Usage: asciixel <image-path> [options]\n"

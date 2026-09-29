@@ -16,14 +16,27 @@ extern "C" {
 namespace asciixel {
 namespace {
 
+/**
+ * @brief Decode one eight-bit sRGB channel to linear light.
+ *
+ * @param channel Encoded channel value in [0, 255].
+ *
+ * @return Linear channel value in [0, 1].
+ */
 float toLinear(std::uint8_t channel)
 {
     const float value = channel / 255.0f;
-    return value <= 0.04045f ? value / 12.92f : std::pow((value + 0.055f) / 1.055f, 2.4f);
+    return value <= 0.04045f ? value / 12.92f
+                           : std::pow((value + 0.055f) / 1.055f, 2.4f);
 }
 
-// Replace deprecated YUVJ format tags with their equivalent YUV formats.
-// Pixel data is unchanged; the JPEG full range is configured separately below.
+/**
+ * @brief Replace deprecated JPEG pixel format tags without changing pixels.
+ *
+ * @param format Decoder-provided pixel format.
+ *
+ * @return Equivalent YUV tag, or the original tag if no replacement is needed.
+ */
 AVPixelFormat normalizeJpegFormat(AVPixelFormat format)
 {
     switch (format) {
@@ -38,16 +51,27 @@ AVPixelFormat normalizeJpegFormat(AVPixelFormat format)
 
 } // namespace
 
+/**
+ * @brief Convert decoded pixels to linear RGB and composite transparency.
+ *
+ * @param source Decoded frame with valid dimensions, planes and strides.
+ * @param background Linear RGB background used for alpha compositing.
+ *
+ * @return Owned linear RGB image with the source dimensions.
+ */
 ImageFrame normalizeFrame(const AVFrame& source, Color background)
 {
+    // Validate the pixel format and retain JPEG's full-range interpretation.
     const auto original_format = static_cast<AVPixelFormat>(source.format);
     if (!av_pix_fmt_desc_get(original_format)) {
         throw std::runtime_error("Cannot convert image pixels");
     }
 
     const AVPixelFormat input_format = normalizeJpegFormat(original_format);
-    const bool full_range = input_format != original_format || source.color_range == AVCOL_RANGE_JPEG;
+    const bool full_range = input_format != original_format ||
+                            source.color_range == AVCOL_RANGE_JPEG;
 
+    // Convert the source format to packed RGBA without resizing.
     std::unique_ptr<SwsContext, decltype(&sws_freeContext)> scaler(
         sws_getContext(source.width, source.height, input_format,
                        source.width, source.height, AV_PIX_FMT_RGBA,
@@ -56,6 +80,8 @@ ImageFrame normalizeFrame(const AVFrame& source, Color background)
     if (!scaler) {
         throw std::runtime_error("Cannot convert image pixels");
     }
+
+    // Override the source range for JPEG while preserving other scaler settings.
     if (full_range) {
         int *source_table = nullptr, *destination_table = nullptr;
         int source_range = 0, destination_range = 0;
@@ -70,6 +96,7 @@ ImageFrame normalizeFrame(const AVFrame& source, Color background)
         }
     }
 
+    // Allocate packed storage and convert all source rows.
     const std::size_t width = static_cast<std::size_t>(source.width);
     const std::size_t height = static_cast<std::size_t>(source.height);
     std::vector<std::uint8_t> rgba(width * height * 4);
@@ -80,6 +107,7 @@ ImageFrame normalizeFrame(const AVFrame& source, Color background)
         throw std::runtime_error("Cannot convert image pixels");
     }
 
+    // Decode sRGB channels before blending against the linear background.
     ImageFrame image(width, height);
     for (std::size_t i = 0; i < image.pixels.size(); ++i) {
         const auto* pixel = rgba.data() + i * 4;
@@ -90,6 +118,7 @@ ImageFrame normalizeFrame(const AVFrame& source, Color background)
             alpha * toLinear(pixel[2]) + (1.0f - alpha) * background.b,
         };
     }
+
     return image;
 }
 
