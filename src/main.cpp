@@ -5,6 +5,7 @@
 #include "asciixel/core/image_sampler.hpp"
 #include "asciixel/io/image_loader.hpp"
 #include "asciixel/io/png_writer.hpp"
+#include "asciixel/io/text_writer.hpp"
 
 #include <exception>
 #include <iostream>
@@ -13,8 +14,6 @@
 #include <vector>
 
 #ifdef _WIN32
-#include <fcntl.h>
-#include <io.h>
 #include <windows.h>
 #endif
 
@@ -34,29 +33,11 @@ asciixel::CharsetConfig defaultCharsetConfig()
     asciixel::CharsetConfig config;
     config.font_path  = defaultFontPath();
     config.pixel_size = 24;
-    for (int ch = 32; ch <= 126; ++ch) {
-        config.candidates += static_cast<char>(ch);
-    }
+    // for (int ch = 32; ch <= 126; ++ch) {
+    //     config.candidates += static_cast<char>(ch);
+    // }
+    config.candidates = " !\"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~";
     return config;
-}
-
-// TODO: Move text export into a dedicated output module.
-void writeAsciiFrame(const asciixel::AsciiFrame& frame)
-{
-#ifdef _WIN32
-    if (_setmode(_fileno(stdout), _O_BINARY) == -1) {
-        throw std::runtime_error("Cannot set stdout to binary mode");
-    }
-#endif
-    for (std::size_t y = 0; y < frame.height; ++y) {
-        for (std::size_t x = 0; x < frame.width; ++x) {
-            std::cout.put(frame.pixels[y * frame.width + x].character);
-        }
-        std::cout.put('\n');
-    }
-    if (!std::cout) {
-        throw std::runtime_error("Cannot write ASCII frame");
-    }
 }
 
 #ifdef _WIN32
@@ -90,7 +71,7 @@ void convertImage(const std::string& path, const std::string& output)
         asciixel::ImageSampler::sample(image, grid.columns, grid.rows);
     const auto frame = asciixel::GlyphMatcher::match(sampled, charset);
     if (output.empty())
-        writeAsciiFrame(frame);
+        asciixel::writeAsciiFrame(frame);
     else
         asciixel::writePng(asciixel::renderAscii(frame, charset), output);
 }

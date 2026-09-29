@@ -29,6 +29,7 @@ add_library(asciixel_core STATIC
 	src/io/image_loader.cpp
 	src/io/frame_converter.cpp
 	src/io/png_writer.cpp
+	src/io/text_writer.cpp
 )
 
 target_link_libraries(asciixel_core PRIVATE freetype
