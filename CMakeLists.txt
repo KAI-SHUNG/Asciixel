@@ -20,6 +20,7 @@ foreach(component avformat avcodec avutil swscale)
 endforeach()
 
 add_library(asciixel_core STATIC
+	src/app/frame_converter.cpp
 	src/core/image_sampler.cpp
 	src/core/charset_builder.cpp
 	src/core/glyph_matcher.cpp
@@ -29,7 +30,7 @@ add_library(asciixel_core STATIC
 	src/config/config_builder.cpp
 	src/io/arg_parser.cpp
 	src/io/image_loader.cpp
-	src/io/frame_converter.cpp
+	src/io/frame_normalizer.cpp
 	src/io/png_writer.cpp
 	src/io/text_writer.cpp
 )
@@ -64,6 +65,9 @@ endif()
 include(CTest)
 
 if(BUILD_TESTING)
+    add_executable(test_frame_converter tests/test_frame_converter.cpp)
+    target_link_libraries(test_frame_converter PRIVATE asciixel_core)
+    add_test(NAME frame_converter COMMAND test_frame_converter)
     add_executable(test_text_writer tests/test_text_writer.cpp)
     target_link_libraries(test_text_writer PRIVATE asciixel_core)
     add_test(NAME text_writer COMMAND test_text_writer "${CMAKE_CURRENT_BINARY_DIR}/text-writer.txt")
@@ -100,10 +104,10 @@ if(BUILD_TESTING)
 		"${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/red_green.png"
 		"${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt")
 
-	add_executable(test_frame_converter tests/test_frame_converter.cpp)
-	target_link_libraries(test_frame_converter PRIVATE asciixel_core)
-	target_include_directories(test_frame_converter PRIVATE "${FFMPEG_ROOT}/include")
-	add_test(NAME frame_converter COMMAND test_frame_converter)
+	add_executable(test_frame_normalizer tests/test_frame_normalizer.cpp)
+	target_link_libraries(test_frame_normalizer PRIVATE asciixel_core)
+	target_include_directories(test_frame_normalizer PRIVATE "${FFMPEG_ROOT}/include")
+	add_test(NAME frame_normalizer COMMAND test_frame_normalizer)
 
 	file(GLOB FFMPEG_DLLS "${FFMPEG_ROOT}/bin/*.dll")
 	if(FFMPEG_DLLS)
@@ -111,9 +115,9 @@ if(BUILD_TESTING)
 			COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FFMPEG_DLLS}
 				$<TARGET_FILE_DIR:test_image_loader>
 			COMMAND_EXPAND_LISTS)
-		add_custom_command(TARGET test_frame_converter POST_BUILD
+		add_custom_command(TARGET test_frame_normalizer POST_BUILD
 			COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FFMPEG_DLLS}
-				$<TARGET_FILE_DIR:test_frame_converter>
+				$<TARGET_FILE_DIR:test_frame_normalizer>
 			COMMAND_EXPAND_LISTS)
 	endif()
 
@@ -146,4 +150,3 @@ if(BUILD_TESTING)
 			-P ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_image_cli.cmake)
 	endif()
 endif()
-

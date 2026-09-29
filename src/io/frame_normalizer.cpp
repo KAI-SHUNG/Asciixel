@@ -1,4 +1,4 @@
-#include "asciixel/io/frame_converter.hpp"
+#include "asciixel/io/frame_normalizer.hpp"
 
 extern "C" {
 #include <libavutil/frame.h>
@@ -38,7 +38,7 @@ AVPixelFormat normalizeJpegFormat(AVPixelFormat format)
 
 } // namespace
 
-ImageFrame convertFrame(const AVFrame& source, Color background)
+ImageFrame normalizeFrame(const AVFrame& source, Color background)
 {
     const auto original_format = static_cast<AVPixelFormat>(source.format);
     if (!av_pix_fmt_desc_get(original_format)) {

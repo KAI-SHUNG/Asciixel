@@ -1,8 +1,6 @@
+#include "asciixel/app/frame_converter.hpp"
 #include "asciixel/core/ascii_renderer.hpp"
 #include "asciixel/core/charset_builder.hpp"
-#include "asciixel/core/glyph_matcher.hpp"
-#include "asciixel/core/grid_layout.hpp"
-#include "asciixel/core/image_sampler.hpp"
 #include "asciixel/io/image_loader.hpp"
 #include "asciixel/io/arg_parser.hpp"
 #include "asciixel/config/config_builder.hpp"
@@ -48,11 +46,7 @@ void convertImage(const asciixel::Config& config)
     const asciixel::ImageFrame image = asciixel::loadImage(config.input_path);
     const asciixel::RasterizedCharset charset =
         asciixel::CharsetBuilder::buildCharset(config.charset);
-    const asciixel::GridSize       grid =
-        asciixel::calculateGrid(image.width, image.height, config.sampling, charset.layout);
-    const asciixel::SampledFrame sampled =
-        asciixel::ImageSampler::sample(image, grid.columns, grid.rows);
-    const auto frame = asciixel::GlyphMatcher::match(sampled, charset);
+    const auto frame = asciixel::convertFrame(image, charset, config.sampling);
     switch (options->output) {
     case asciixel::ImageOutput::Terminal:
         asciixel::writeAsciiFrame(frame);

@@ -1,5 +1,5 @@
 #include "asciixel/io/image_loader.hpp"
-#include "asciixel/io/frame_converter.hpp"
+#include "asciixel/io/frame_normalizer.hpp"
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -84,7 +84,7 @@ ImageFrame loadImage(const std::string& path, Color background)
 {
     Input input = openImage(path);
     Frame frame = decodeImage(input.get());
-    return convertFrame(*frame, background);
+    return normalizeFrame(*frame, background);
 }
 
 } // namespace asciixel
