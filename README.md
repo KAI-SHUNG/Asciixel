@@ -51,7 +51,7 @@ cmake --build build --parallel
 
 ```bash
 ./build/asciixel <photo-path>                                    # to terminal
-./build/asciixel <photo-path> --format png --output <output.png> # to PNG file
+./build/asciixel <photo-path> --output <output.png> # to PNG file
 
 # test for terminal output
 # it will use the pictures in directory examples
@@ -62,19 +62,20 @@ Currently, the program uses a default font path(Linux: `/usr/share/fonts/truetyp
 
 ## 当前可运行入口
 
-构建完成后运行 `build/asciixel.exe <图片路径>`，字符画写入 stdout。入口固定使用 Windows 的 `C:/Windows/Fonts/consola.ttf`（Linux 为 `/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf`）、24 像素字号和标点字符集；字体不存在时会报错。当前只处理图片，支持 `--format terminal|png`、`--output`、`--font`、`--font-size`、`--columns` 和单独使用的 `--help`，其余下文规划的选项和视频播放尚未实现。
+构建完成后运行 `build/asciixel.exe <图片路径>`，字符画写入 stdout。入口固定使用 Windows 的 `C:/Windows/Fonts/consola.ttf`（Linux 为 `/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf`）、24 像素字号和标点字符集；字体不存在时会报错。当前只处理图片，支持 `-o/--output [path]`、`--font`、`--font-size`、`--columns` 和单独使用的 `--help`，其余下文规划的选项和视频播放尚未实现。
 
-黑底白字 PNG 导出：`./build/asciixel.exe photo.jpg --format png --output art.png`，构建步骤见上文快速开始。已有 FFmpeg 构建也需重新执行脚本，以启用 PNG 编码器。PNG 输出为不透明的 8 位灰度图，保留字体抗锯齿；尺寸为字符列数 × 格子宽度、字符行数 × 格子高度。单张输出像素缓冲区限制为 256 MiB。指定 `--output art.png` 即选择文件输出，并根据扩展名推断 PNG 编码（不区分大小写）。没有扩展名时必须显式指定 `--format png`；未知扩展名或与显式格式冲突时拒绝输出，当前不支持 JPEG 导出。输出路径不支持 `-`，拒绝覆盖已有文件，支持中文路径。不指定输出路径时输出文本到 stdout；兼容 `--format terminal`，但不能与 `--output` 同用。单独指定 `--format png` 而没有输出路径会报错。
+黑底白字 PNG 导出：`./build/asciixel.exe photo.jpg --output art.png`，构建步骤见上文快速开始。已有 FFmpeg 构建也需重新执行脚本，以启用 PNG 编码器。PNG 输出为不透明的 8 位灰度图，保留字体抗锯齿；尺寸为字符列数 × 格子宽度、字符行数 × 格子高度。单张输出像素缓冲区限制为 256 MiB。指定 `-o art.png` 或 `-o art.txt` 根据后缀选择 PNG 或 TXT（不区分大小写）。裸 `-o` / `--output` 默认在输入文件同目录生成 `<输入文件主名>_asciixel.png`，例如 `images/example.jpg -o` 生成 `images/example_asciixel.png`。不指定 `-o` 则输出到终端。TXT 使用 UTF-8 无 BOM、LF 换行并保留行尾空格。显式空路径（`-o=`）、无扩展名、未知后缀及 `-` 都会报错；所有文件输出均拒绝覆盖已有文件，支持中文路径。`--format` 已移除。
+
 
 输出列数为 `min(原图宽度, SampleConfig.columns)`，默认配置为 200 列，可通过 `--columns 1..4096` 指定。行数为 `max(1, round(列数 × 原图高度 / 原图宽度 × 字符格宽度 / 字符格高度))`，字符格尺寸由实际字体和字号确定。小图不增加列数，行数没有 200 的上限。
 
 `CharsetBuilder` 根据 `CharsetConfig` 构建 `RasterizedCharset`，保存统一格子布局、基线原点，以及每个字符的原始灰度位图、偏移和覆盖率。匹配阶段将覆盖率归一化后选字。当前处理链路为 `ImageFrame → SampledFrame → AsciiFrame`，随后输出文本，或由 `core/ascii_renderer` 生成 `GrayBitmap`，交给 `io/png_writer` 编码保存。渲染接口不暴露 FFmpeg 类型。
 
-参数解析返回 `std::variant<ParsedArguments, ParseError>`，输入不包含程序名。`ParsedArguments` 保存位置参数、选项原始字符串和帮助标记；`config/config_builder` 中的 `buildConfig(const ConfigValues&)` 接收规范键名的字符串 map，将其映射到 `makeDefaultConfig()` 提供的默认配置。`main` 随后调用 `resolveConfig()` 补全输出目标和编码，并由 `validateConfig()` 校验公共规则；GUI 可直接构造配置并调用相同的补全、校验函数。参数可放在图片路径前后，`--` 后的内容作为位置参数，支持以 `-` 开头的输入文件名。当前 CLI 构造图片配置，不根据扩展名自动识别视频。
+参数解析返回 `std::variant<ParsedArguments, ParseError>`，输入不包含程序名。`ParsedArguments` 保存位置参数、选项原始字符串和帮助标记；`config/config_builder` 中的 `buildConfig(const ConfigValues&)` 接收规范键名的 `map<string, optional<string>>` 形式参数（实际类型为 `unordered_map`），将其映射到 `makeDefaultConfig()` 提供的默认配置。`main` 随后调用 `resolveConfig()` 补全输出目标和编码，并由 `validateConfig()` 校验公共规则；GUI 可直接构造配置并调用相同的补全、校验函数。参数可放在图片路径前后，`--` 后的内容作为位置参数，支持以 `-` 开头的输入文件名。当前 CLI 构造图片配置，不根据扩展名自动识别视频。
 
 选项支持 `--font mono.ttf` 和 `--font=mono.ttf`；输出路径还支持 `-o art.png`、`-o=art.png`，帮助支持 `-h`。仅提供 `-o`、`-h` 两个缩写，不支持短选项拼接或组合。长短名称归一化后检查重复，空值保留给配置层校验。以 `-` 开头的选项值可使用等号形式，值中的其他等号会保留。
 
-GUI 可直接调用 `buildConfig({{"input", "photo.png"}, {"output", "art.png"}, {"columns", "80"}})`，再调用 `resolveConfig()`。map 使用不带横线前缀的键：`input`、`output`、`format`、`font`、`font-size`、`columns`；帮助请求不属于配置。CLI 入口负责把唯一的位置参数填入 `input`，配置构造器不依赖 `ParsedArguments`。
+GUI 可直接调用 `buildConfig({{"input", "photo.png"}, {"output", "art.png"}, {"columns", "80"}})`，再调用 `resolveConfig()`。map 使用不带横线前缀的键：`input`、`output`、`font`、`font-size`、`columns`；`output` 键缺失表示终端，值为 `std::nullopt` 表示默认输出路径，字符串表示显式路径。图片输出使用 `ImageOutput::{Terminal, Png, Txt}`，由 `main` 分派到 `io` 输出函数。帮助请求不属于配置。CLI 入口负责把唯一的位置参数填入 `input`，配置构造器不依赖 `ParsedArguments`。
 
 
 ## 首版目标
@@ -96,8 +97,8 @@ GUI 可直接调用 `buildConfig({{"input", "photo.png"}, {"output", "art.png"},
 
 ```text
 asciixel photo.png --font fonts/mono.ttf
-asciixel photo.png --font fonts/mono.ttf --format txt --output art.txt --columns 120
-asciixel photo.png --font fonts/mono.ttf --format txt --theme light --mapping faithful
+asciixel photo.png --font fonts/mono.ttf --output art.txt --columns 120
+asciixel photo.png --font fonts/mono.ttf --output art.txt --theme light --mapping faithful
 asciixel clip.mp4 --font fonts/mono.ttf --columns auto --hysteresis 0
 ```
 
@@ -106,8 +107,7 @@ asciixel clip.mp4 --font fonts/mono.ttf --columns auto --hysteresis 0
 | `<input>` | 必填 | 单个本地 PNG/JPEG 或支持的 SDR 视频文件 |
 | `--font <path>` | 必填 | 等宽字体，face 0 |
 | `--font-size <N>` | 16 | 像素字号，整数 1～256 |
-| `--format terminal\|txt` | terminal | 终端预览或静态文本；视频不能输出 TXT |
-| `--output <path\|->` | txt 为 `-` | 仅 TXT 使用；`-` 表示 stdout；拒绝覆盖现存文件 |
+| `-o, --output [path]` | 不指定时输出终端 | 裸选项生成 `_asciixel.png`；显式路径支持 PNG/TXT，拒绝覆盖 |
 | `--columns <N\|auto>` | terminal 为 auto，txt 为 120 | 整数 1～4096；TXT 不支持 auto |
 | `--theme dark\|light` | dark | 黑底白字或白底黑字，同时决定透明像素合成背景 |
 | `--mapping stretch\|faithful` | stretch | 密度铺满或亮度保真，可与任意主题组合 |

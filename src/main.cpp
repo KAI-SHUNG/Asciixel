@@ -53,10 +53,17 @@ void convertImage(const asciixel::Config& config)
     const asciixel::SampledFrame sampled =
         asciixel::ImageSampler::sample(image, grid.columns, grid.rows);
     const auto frame = asciixel::GlyphMatcher::match(sampled, charset);
-    if (config.output_config == asciixel::OutputConfig::Terminal)
+    switch (options->output) {
+    case asciixel::ImageOutput::Terminal:
         asciixel::writeAsciiFrame(frame);
-    else
+        break;
+    case asciixel::ImageOutput::Png:
         asciixel::writePng(asciixel::renderAscii(frame, charset), *options->output_path);
+        break;
+    case asciixel::ImageOutput::Txt:
+        asciixel::writeAsciiFile(frame, *options->output_path);
+        break;
+    }
 }
 
 } // namespace

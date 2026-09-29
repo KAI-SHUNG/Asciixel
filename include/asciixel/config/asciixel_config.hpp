@@ -20,18 +20,15 @@ struct SampleConfig {
     std::size_t columns = 200;
 };
 
-enum class OutputConfig {
+enum class ImageOutput {
     Terminal,
-    File
-};
-
-enum class ImageFormat {
-    Png
+    Png,
+    Txt
 };
 
 struct ImageConfig {
+    ImageOutput output = ImageOutput::Terminal;
     std::optional<std::string> output_path;
-    std::optional<ImageFormat> format;
 };
 
 struct VideoConfig {
@@ -46,7 +43,6 @@ struct Config {
     SampleConfig  sampling;
 
     std::string  input_path;
-    OutputConfig output_config = OutputConfig::Terminal;
     MediaConfig  media_config;
 };
 

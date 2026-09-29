@@ -2,6 +2,7 @@
 #define ASCIIXEL_IO_ARG_PARSER_HPP
 
 #include <string>
+#include <optional>
 #include <variant>
 #include <unordered_map>
 #include <vector>
@@ -11,7 +12,7 @@ namespace asciixel {
 struct ParsedArguments {
     std::vector<std::string> positional;
     // Canonical long names without leading dashes; aliases normalize here.
-    std::unordered_map<std::string, std::string> options;
+    std::unordered_map<std::string, std::optional<std::string>> options;
     bool help = false;
 };
 

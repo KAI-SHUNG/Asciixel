@@ -1,6 +1,6 @@
 set(output "${CMAKE_CURRENT_BINARY_DIR}/字符画导出.png")
 file(REMOVE "${output}")
-execute_process(COMMAND "${PROGRAM}" "${INPUT}" --format png --output "${output}"
+execute_process(COMMAND "${PROGRAM}" "${INPUT}" --output "${output}"
     RESULT_VARIABLE result OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr)
 if(NOT result EQUAL 0 OR NOT stdout STREQUAL "" OR NOT stderr STREQUAL "")
     message(FATAL_ERROR "PNG export failed: ${result}: ${stderr}")
@@ -10,7 +10,7 @@ if(NOT signature STREQUAL "89504e470d0a1a0a")
     message(FATAL_ERROR "Invalid PNG signature")
 endif()
 file(SHA256 "${output}" before)
-execute_process(COMMAND "${PROGRAM}" "${INPUT}" --format png --output "${output}"
+execute_process(COMMAND "${PROGRAM}" "${INPUT}" --output "${output}"
     RESULT_VARIABLE result OUTPUT_QUIET ERROR_QUIET)
 file(SHA256 "${output}" after)
 if(NOT result EQUAL 1 OR NOT before STREQUAL after)
@@ -19,19 +19,15 @@ endif()
 execute_process(COMMAND "${PROGRAM}" "${INPUT}" --format png
     RESULT_VARIABLE result OUTPUT_QUIET ERROR_QUIET)
 if(NOT result EQUAL 2)
-    message(FATAL_ERROR "Missing PNG output must be a usage error")
+    message(FATAL_ERROR "Removed --format must be a usage error")
 endif()
 file(REMOVE "${output}")
 
-# Inferred encoding and explicit encoding for an extensionless output.
-foreach(name IN ITEMS inferred.PNG extensionless)
+# Case-insensitive inferred encoding.
+foreach(name IN ITEMS inferred.PNG)
     set(output "${CMAKE_CURRENT_BINARY_DIR}/${name}")
     file(REMOVE "${output}")
-    set(extra_args)
-    if(name STREQUAL "extensionless")
-        set(extra_args --format png)
-    endif()
-    execute_process(COMMAND "${PROGRAM}" "${INPUT}" --output "${output}" ${extra_args}
+    execute_process(COMMAND "${PROGRAM}" "${INPUT}" --output "${output}"
         RESULT_VARIABLE result OUTPUT_VARIABLE stdout ERROR_VARIABLE stderr)
     if(NOT result EQUAL 0 OR NOT stdout STREQUAL "" OR NOT stderr STREQUAL "")
         message(FATAL_ERROR "Output format resolution failed: ${result}: ${stderr}")
@@ -44,7 +40,7 @@ foreach(name IN ITEMS inferred.PNG extensionless)
 endforeach()
 set(output "${CMAKE_CURRENT_BINARY_DIR}/conflicting.jpg")
 file(REMOVE "${output}")
-execute_process(COMMAND "${PROGRAM}" "${INPUT}" --output "${output}" --format png
+execute_process(COMMAND "${PROGRAM}" "${INPUT}" --output "${output}"
     RESULT_VARIABLE result OUTPUT_QUIET ERROR_QUIET)
 if(NOT result EQUAL 2 OR EXISTS "${output}")
     message(FATAL_ERROR "Conflicting format must fail before creating an output")

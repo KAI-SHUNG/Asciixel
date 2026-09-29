@@ -21,7 +21,6 @@ ParseResult parseArguments(const std::vector<std::string>& args)
         std::string key;
         if (name == "--output" || name == "-o") key = "output";
         else if (name == "--help" || name == "-h") key = "help";
-        else if (name == "--format") key = "format";
         else if (name == "--font") key = "font";
         else if (name == "--font-size") key = "font-size";
         else if (name == "--columns") key = "columns";
@@ -41,14 +40,16 @@ ParseResult parseArguments(const std::vector<std::string>& args)
             // Preserve empty values and any subsequent '=' for the builder.
             parsed.options.emplace(key, arg.substr(equals + 1));
         } else {
-            if (i + 1 == args.size())
+            const bool next_is_option = i + 1 < args.size() &&
+                args[i + 1].size() > 1 && args[i + 1][0] == '-' &&
+                (args[i + 1][1] < '0' || args[i + 1][1] > '9');
+            if (i + 1 == args.size() || next_is_option) {
+                if (key == "output") {
+                    parsed.options.emplace(key, std::nullopt);
+                    continue;
+                }
                 return ParseError{"Missing option value: " + name};
-            const auto& value = args[i + 1];
-            // '-' and negative numbers remain values. Dash-prefixed paths can
-            // always be supplied unambiguously using --name=value.
-            if (value.size() > 1 && value[0] == '-' &&
-                (value[1] < '0' || value[1] > '9'))
-                return ParseError{"Missing option value: " + name};
+            }
             parsed.options.emplace(key, args[++i]);
         }
     }
@@ -58,8 +59,8 @@ ParseResult parseArguments(const std::vector<std::string>& args)
 const char* argumentHelp()
 {
     return "Usage: asciixel <image-path> [options]\n"
-           "  --format terminal|png   File encoding; terminal is a compatibility option\n"
-           "  -o, --output <path>         File destination; infer PNG from .png (case-insensitive)\n"
+           "  -o, --output [path]     Save .png or .txt; no path: <input-stem>_asciixel.png\n"
+           "                         Default file is beside input; omit -o for terminal.\n"
            "  --font <path>           Font file (default: platform font)\n"
            "  --font-size <N>         Pixel size, 1..256 (default: 24)\n"
            "  --columns <N>           Columns, 1..4096 (default: 200)\n"

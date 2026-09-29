@@ -19,32 +19,29 @@ T parseInteger(const std::string& value, const std::string& option)
 Config buildConfig(const ConfigValues& values)
 {
     const auto input = values.find("input");
-    if (input == values.end())
+    if (input == values.end() || !input->second)
         throw std::invalid_argument("Input path is required");
     Config config = makeDefaultConfig();
-    config.input_path = input->second;
+    config.input_path = *input->second;
     auto& image = std::get<ImageConfig>(config.media_config);
-    bool terminal_requested = false;
     for (const auto& [option, value] : values) {
         if (option == "input") continue;
-        if (option == "format") {
-            if (value == "terminal") terminal_requested = true;
-            else if (value == "png") image.format = ImageFormat::Png;
-            else throw std::invalid_argument("Format must be terminal or png");
-        } else if (option == "output") {
+        if (option == "output") {
+            image.output = ImageOutput::Png;
             image.output_path = value;
-        } else if (option == "font") {
-            config.charset.font_path = value;
+            continue;
+        }
+        if (!value) throw std::invalid_argument("Missing value: " + option);
+        if (option == "font") {
+            config.charset.font_path = *value;
         } else if (option == "font-size") {
-            config.charset.pixel_size = parseInteger<unsigned>(value, option);
+            config.charset.pixel_size = parseInteger<unsigned>(*value, option);
         } else if (option == "columns") {
-            config.sampling.columns = parseInteger<std::size_t>(value, option);
+            config.sampling.columns = parseInteger<std::size_t>(*value, option);
         } else {
             throw std::invalid_argument("Unknown option: " + option);
         }
     }
-    if (terminal_requested && image.output_path)
-        throw std::invalid_argument("--format terminal does not accept --output");
     return config;
 }
 
