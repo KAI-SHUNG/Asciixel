@@ -26,6 +26,8 @@ add_library(asciixel_core STATIC
 	src/core/grid_layout.cpp
 	src/core/ascii_renderer.cpp
 	src/config/asciixel_config.cpp
+	src/config/config_builder.cpp
+	src/io/arg_parser.cpp
 	src/io/image_loader.cpp
 	src/io/frame_converter.cpp
 	src/io/png_writer.cpp
@@ -62,6 +64,10 @@ endif()
 include(CTest)
 
 if(BUILD_TESTING)
+    add_executable(test_arg_parser tests/test_arg_parser.cpp)
+    target_link_libraries(test_arg_parser PRIVATE asciixel_core)
+    add_test(NAME arg_parser COMMAND test_arg_parser)
+
     add_executable(test_ascii_renderer tests/test_ascii_renderer.cpp)
     target_link_libraries(test_ascii_renderer PRIVATE asciixel_core)
     add_test(NAME ascii_renderer COMMAND test_ascii_renderer)

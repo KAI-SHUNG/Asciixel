@@ -3,14 +3,14 @@
 
 #include <cstddef>
 #include <optional>
-#include <variant>
 #include <string>
+#include <variant>
 
 namespace asciixel {
 
 struct CharsetConfig {
     std::string font_path;
-    unsigned pixel_size = 24;
+    unsigned    pixel_size = 24;
     std::string candidates;
 
     void validate() const;
@@ -25,8 +25,13 @@ enum class OutputConfig {
     File
 };
 
+enum class ImageFormat {
+    Png
+};
+
 struct ImageConfig {
     std::optional<std::string> output_path;
+    std::optional<ImageFormat> format;
 };
 
 struct VideoConfig {
@@ -38,13 +43,18 @@ using MediaConfig = std::variant<ImageConfig, VideoConfig>;
 
 struct Config {
     CharsetConfig charset;
-    SampleConfig sampling;
+    SampleConfig  sampling;
 
-    std::string input_path;
+    std::string  input_path;
     OutputConfig output_config = OutputConfig::Terminal;
-    MediaConfig media_config;
+    MediaConfig  media_config;
 };
 
-}
+Config makeDefaultConfig();
+// Resolve output destination and image encoding, then validate the result.
+Config resolveConfig(Config config);
+void   validateConfig(const Config& config);
+
+} // namespace asciixel
 
 #endif // ASCIIXEL_CONFIG_HPP

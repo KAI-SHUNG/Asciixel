@@ -32,3 +32,29 @@ endif()
 if(NOT unicode_output STREQUAL output)
     message(FATAL_ERROR "Unicode path changed image output")
 endif()
+
+execute_process(COMMAND "${PROGRAM}" --help
+    RESULT_VARIABLE result OUTPUT_VARIABLE help ERROR_VARIABLE error)
+if(NOT result EQUAL 0 OR NOT error STREQUAL "" OR NOT help MATCHES "--columns")
+    message(FATAL_ERROR "Help must succeed without opening an input: ${error}")
+endif()
+execute_process(COMMAND "${PROGRAM}" "${INPUT}" --columns 1 --font-size 32
+    RESULT_VARIABLE result OUTPUT_VARIABLE narrowed ERROR_VARIABLE error)
+if(NOT result EQUAL 0 OR NOT error STREQUAL "")
+    message(FATAL_ERROR "Custom settings failed: ${error}")
+endif()
+string(LENGTH "${narrowed}" narrowed_length)
+if(NOT narrowed_length EQUAL 2)
+    message(FATAL_ERROR "Expected one character and LF with --columns 1")
+endif()
+execute_process(COMMAND "${PROGRAM}" "${INPUT}" --columns 0
+    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+if(NOT result EQUAL 2 OR NOT output STREQUAL "" OR error STREQUAL "")
+    message(FATAL_ERROR "Invalid config must be reported on stderr with exit code 2")
+endif()
+
+execute_process(COMMAND "${PROGRAM}" -h
+    RESULT_VARIABLE result OUTPUT_VARIABLE short_help ERROR_VARIABLE error)
+if(NOT result EQUAL 0 OR NOT error STREQUAL "" OR NOT short_help STREQUAL help)
+    message(FATAL_ERROR "-h must produce the same help as --help")
+endif()
