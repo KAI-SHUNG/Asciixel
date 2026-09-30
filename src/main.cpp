@@ -1,11 +1,7 @@
-#include "asciixel/app/frame_converter.hpp"
-#include "asciixel/core/ascii_renderer.hpp"
-#include "asciixel/core/charset_builder.hpp"
-#include "asciixel/io/image_loader.hpp"
-#include "asciixel/io/arg_parser.hpp"
+#include "asciixel/app/image_pipeline.hpp"
+#include "asciixel/app/video_player.hpp"
 #include "asciixel/config/config_builder.hpp"
-#include "asciixel/io/png_writer.hpp"
-#include "asciixel/io/text_writer.hpp"
+#include "asciixel/io/arg_parser.hpp"
 
 #include <exception>
 #include <iostream>
@@ -39,7 +35,8 @@ std::string toUtf8(const wchar_t* value)
     // Encode into owned storage and remove the API's null terminator.
     std::string utf8(static_cast<std::size_t>(length), '\0');
     if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value, -1,
-                            utf8.data(), length, nullptr, nullptr) == 0) {
+                            utf8.data(), length, nullptr, nullptr)
+        == 0) {
         throw std::runtime_error("Cannot encode image path as UTF-8");
     }
     utf8.pop_back();
@@ -47,52 +44,15 @@ std::string toUtf8(const wchar_t* value)
 }
 #endif
 
-/**
- * @brief Run one image conversion and dispatch its selected output.
- *
- * @param config Resolved image configuration, including output destination.
- *
- * @return No value; configuration and conversion failures propagate.
- */
-void convertImage(const asciixel::Config& config)
-{
-    // Reject unsupported media before loading any conversion resources.
-    asciixel::validateConfig(config);
-    const auto* options = std::get_if<asciixel::ImageConfig>(&config.media_config);
-    if (!options) {
-        throw std::invalid_argument("Video conversion is not supported yet");
-    }
-
-    // Prepare image pixels and font data for the synchronous frame conversion.
-    const asciixel::ImageFrame image = asciixel::loadImage(config.input_path);
-    const asciixel::RasterizedCharset charset =
-        asciixel::CharsetBuilder::buildCharset(config.charset);
-    const auto frame = asciixel::convertFrame(image, charset, config.sampling);
-
-    // Render glyph bitmaps only when the selected output requires pixels.
-    switch (options->output) {
-    case asciixel::ImageOutput::Terminal:
-        asciixel::writeAsciiFrame(frame);
-        break;
-    case asciixel::ImageOutput::Png:
-        asciixel::writePng(asciixel::renderAscii(frame, charset),
-                           *options->output_path);
-        break;
-    case asciixel::ImageOutput::Txt:
-        asciixel::writeAsciiFile(frame, *options->output_path);
-        break;
-    }
-}
-
 } // namespace
 
 /**
- * @brief Parse CLI options, run the image task and report failures.
+ * @brief Parse CLI options, dispatch image conversion or video playback.
  *
  * @param argc Number of command-line arguments, including the executable.
  * @param argv Argument array; UTF-16 on Windows and native char strings elsewhere.
  *
- * @return 0 on success, 2 for invalid arguments, or 1 for other failures.
+ * @return 0 on success, 2 for invalid arguments, 1 for failures, 130 on interrupt.
  */
 #ifdef _WIN32
 int wmain(int argc, wchar_t** argv)
@@ -114,7 +74,8 @@ int main(int argc, char** argv)
         // Handle syntax errors and help before building a conversion request.
         const auto result = asciixel::parseArguments(args);
         if (const auto* error = std::get_if<asciixel::ParseError>(&result)) {
-            std::cerr << error->message << '\n' << asciixel::argumentHelp();
+            std::cerr << error->message << '\n'
+                      << asciixel::argumentHelp();
             return 2;
         }
         const auto& arguments = std::get<asciixel::ParsedArguments>(result);
@@ -130,8 +91,13 @@ int main(int argc, char** argv)
         values.emplace("input", arguments.positional.front());
         const auto config = asciixel::resolveConfig(asciixel::buildConfig(values));
 
-        // Execute synchronously; the surrounding handlers select the exit code.
-        convertImage(config);
+        // Switch to right media type's pipeline
+        if (std::holds_alternative<asciixel::ImageConfig>(config.media_config)) {
+            asciixel::convertImage(config);
+        }
+        else if (std::holds_alternative<asciixel::VideoConfig>(config.media_config)) {
+            return asciixel::playVideo(config) ? 0 : 130;
+        }
         return 0;
     }
     catch (const std::invalid_argument& error) {
