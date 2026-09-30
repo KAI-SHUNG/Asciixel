@@ -10,8 +10,9 @@ namespace asciixel {
 
 // Synchronously convert one linear RGB image using a caller-prepared charset.
 // Computes the grid, samples pixels and matches glyphs; performs no I/O.
-AsciiFrame convertFrame(const ImageFrame& image, const RasterizedCharset& charset,
-                        const SampleConfig& sampling);
+AsciiFrame convertFrame(const ImageFrame&        image,
+                        const RasterizedCharset& charset,
+                        const SampleConfig&      config);
 
 } // namespace asciixel
 
