@@ -83,13 +83,14 @@ ParseResult parseArguments(const std::vector<std::string>& args)
  */
 const char* argumentHelp()
 {
-    return "Usage: asciixel <image-path> [options]\n"
+    return "Usage: asciixel <image-path> [options]\n\n"
+           "Options:\n\n"
            "  -o, --output [path]     Save .png or .txt; no path: <input-stem>_asciixel.png\n"
-           "                         Default file is beside input; omit -o for terminal.\n"
-           "  --font <path>           Font file (default: platform font)\n"
-           "  --font-size <N>         Pixel size, 1..256 (default: 24)\n"
-           "  --columns <N>           Columns, 1..4096 (default: 200)\n"
-           "  -h, --help              Show help; use alone\n"
+           "                          Default file is beside input; omit -o for terminal.\n\n"
+           "  --font <path>           Font file (default: platform font)\n\n"
+           "  --font-size <N>         Pixel size, 1..256 (default: 24)\n\n"
+           "  --columns <N>           Columns, 1..4096 (default: 200)\n\n"
+           "  -h, --help              Show help\n\n"
            "  Values support --name=value and -o=value as well as spaces.\n"
            "  --                      End options (for input paths starting with '-')\n";
 }

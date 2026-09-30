@@ -60,177 +60,44 @@ bash examples/test.sh # Linux
 
 Currently, the program uses a default font path(Linux: `/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf`, Windows: `C:/Windows/Fonts/consola.ttf`) and size. If the font is missing, it will report an error. You can install the required font or specify another font with `--font <path>`. Use `--font-size <N>` (1–256, default 24) and `--columns <N>` (1–4096, default 200) to customize rendering.
 
-## 当前可运行入口
+## Supported Arguments
 
-构建完成后运行 `build/asciixel.exe <图片路径>`，字符画写入 stdout。入口固定使用 Windows 的 `C:/Windows/Fonts/consola.ttf`（Linux 为 `/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf`）、24 像素字号和标点字符集；字体不存在时会报错。当前只处理图片，支持 `-o/--output [path]`、`--font`、`--font-size`、`--columns` 和单独使用的 `--help`，其余下文规划的选项和视频播放尚未实现。
+Currently supports static JPG and PNG images, with terminal, PNG, or TXT output. Video is not yet supported.
 
-黑底白字 PNG 导出：`./build/asciixel.exe photo.jpg --output art.png`，构建步骤见上文快速开始。已有 FFmpeg 构建也需重新执行脚本，以启用 PNG 编码器。PNG 输出为不透明的 8 位灰度图，保留字体抗锯齿；尺寸为字符列数 × 格子宽度、字符行数 × 格子高度。单张输出像素缓冲区限制为 256 MiB。指定 `-o art.png` 或 `-o art.txt` 根据后缀选择 PNG 或 TXT（不区分大小写）。裸 `-o` / `--output` 默认在输入文件同目录生成 `<输入文件主名>_asciixel.png`，例如 `images/example.jpg -o` 生成 `images/example_asciixel.png`。不指定 `-o` 则输出到终端。TXT 使用 UTF-8 无 BOM、LF 换行并保留行尾空格。显式空路径（`-o=`）、无扩展名、未知后缀及 `-` 都会报错；所有文件输出均拒绝覆盖已有文件，支持中文路径。`--format` 已移除。
+| Argument | Default | Description |
+| --- | --- | --- |
+| `<image-path>` | Required | Path to a single input image |
+| `-o, --output [path]` | Terminal output | Save to a `.png` or `.txt` file; omit the path to create `<input-stem>_asciixel.png` beside the input |
+| `--font <path>` | Platform default, see above | Monospace font file used for glyph calibration |
+| `--font-size <N>` | 24 | Font size in pixels, integer from 1 to 256 |
+| `--columns <N>` | 200 | Character columns, integer from 1 to 4096, capped at the source image width; rows follow the image and font cell proportions |
+| `-h, --help` | — | Show help; must be used alone |
+| `--` | — | End option parsing; subsequent tokens are treated as positional arguments |
 
+Option values accept spaces or equals signs, such as `--columns 80`, `--columns=80`, and `-o=art.txt`.
+Output extensions are case-insensitive. Existing output files are never overwritten. For terminal output, use the same font as specified by `--font` for a closer match.
 
-输出列数为 `min(原图宽度, SampleConfig.columns)`，默认配置为 200 列，可通过 `--columns 1..4096` 指定。行数为 `max(1, round(列数 × 原图高度 / 原图宽度 × 字符格宽度 / 字符格高度))`，字符格尺寸由实际字体和字号确定。小图不增加列数，行数没有 200 的上限。
-
-`CharsetBuilder` 根据 `CharsetConfig` 构建 `RasterizedCharset`，保存统一格子布局、基线原点，以及每个字符的原始灰度位图、偏移和覆盖率。匹配阶段将覆盖率归一化后选字。当前处理链路为 `ImageFrame → SampledFrame → AsciiFrame`，随后输出文本，或由 `core/ascii_renderer` 生成 `GrayBitmap`，交给 `io/png_writer` 编码保存。渲染接口不暴露 FFmpeg 类型。
-
-参数解析返回 `std::variant<ParsedArguments, ParseError>`，输入不包含程序名。`ParsedArguments` 保存位置参数、选项原始字符串和帮助标记；`config/config_builder` 中的 `buildConfig(const ConfigValues&)` 接收规范键名的 `map<string, optional<string>>` 形式参数（实际类型为 `unordered_map`），将其映射到 `makeDefaultConfig()` 提供的默认配置。`main` 随后调用 `resolveConfig()` 补全输出目标和编码，并由 `validateConfig()` 校验公共规则；GUI 可直接构造配置并调用相同的补全、校验函数。参数可放在图片路径前后，`--` 后的内容作为位置参数，支持以 `-` 开头的输入文件名。当前 CLI 构造图片配置，不根据扩展名自动识别视频。
-
-选项支持 `--font mono.ttf` 和 `--font=mono.ttf`；输出路径还支持 `-o art.png`、`-o=art.png`，帮助支持 `-h`。仅提供 `-o`、`-h` 两个缩写，不支持短选项拼接或组合。长短名称归一化后检查重复，空值保留给配置层校验。以 `-` 开头的选项值可使用等号形式，值中的其他等号会保留。
-
-GUI 可直接调用 `buildConfig({{"input", "photo.png"}, {"output", "art.png"}, {"columns", "80"}})`，再调用 `resolveConfig()`。map 使用不带横线前缀的键：`input`、`output`、`font`、`font-size`、`columns`；`output` 键缺失表示终端，值为 `std::nullopt` 表示默认输出路径，字符串表示显式路径。图片输出使用 `ImageOutput::{Terminal, Png, Txt}`，由 `main` 分派到 `io` 输出函数。帮助请求不属于配置。CLI 入口负责把唯一的位置参数填入 `input`，配置构造器不依赖 `ParsedArguments`。
-
-
-## 首版目标
-
-- C++17 + CMake；以 Windows 为首个验证平台，核心算法保持平台无关。
-- FFmpeg 解码本地 PNG、JPEG 和构建所支持的 SDR 视频格式；首版不播放音频。
-- 图片输出单色终端字符画或 UTF-8 TXT；视频在支持 ANSI 的终端中播放单色字符动画。
-- 用户指定等宽字体文件；像素字号默认 16，列数支持显式指定或终端自动适配，TXT 默认 120 列；按字符单元比例计算行数。
-- 通过 FreeType 标定 ASCII 32～126 的实际 alpha 覆盖率，包含空格，缺字明确报告。
-- 对图像分块求面积加权平均亮度，再按实际字形密度匹配，默认铺满字符密度范围。
-- 支持黑底白字、白底黑字和保真亮度模式；视频采用时间戳调度与可关闭的字符迟滞。
-- 同一字体配置在进程内只标定一次；错误可读，退出时恢复终端状态。
-
-终端的字体与栅格化不由程序控制。指定字体用于标定及比例计算，用户需在终端设置相应字体；终端效果属于近似结果。
-
-## 首版命令行约定
-
-以下命令是待实现的完整接口示例，目前还不能运行。`fonts/mono.ttf` 是用户提供字体的示例路径。
-
-```text
-asciixel photo.png --font fonts/mono.ttf
-asciixel photo.png --font fonts/mono.ttf --output art.txt --columns 120
-asciixel photo.png --font fonts/mono.ttf --output art.txt --theme light --mapping faithful
-asciixel clip.mp4 --font fonts/mono.ttf --columns auto --hysteresis 0
+```bash
+./build/asciixel photo.jpg --columns 80
+./build/asciixel photo.jpg -o art.txt
+./build/asciixel photo.jpg -o
 ```
 
-| 参数 | 默认值 | 说明 |
-| --- | --- | --- |
-| `<input>` | 必填 | 单个本地 PNG/JPEG 或支持的 SDR 视频文件 |
-| `--font <path>` | 必填 | 等宽字体，face 0 |
-| `--font-size <N>` | 16 | 像素字号，整数 1～256 |
-| `-o, --output [path]` | 不指定时输出终端 | 裸选项生成 `_asciixel.png`；显式路径支持 PNG/TXT，拒绝覆盖 |
-| `--columns <N\|auto>` | terminal 为 auto，txt 为 120 | 整数 1～4096；TXT 不支持 auto |
-| `--theme dark\|light` | dark | 黑底白字或白底黑字，同时决定透明像素合成背景 |
-| `--mapping stretch\|faithful` | stretch | 密度铺满或亮度保真，可与任意主题组合 |
-| `--hysteresis <h>` | 视频为 0.005 | 有限数值 0～1，0 关闭；静态图片不接受显式设置 |
-| `--help` | — | 单独使用，显示帮助 |
-
-终端模式要求 stdout 为交互终端且支持 ANSI 和尺寸查询，不因重定向自动切换格式。终端预留最后一行和一列，自动模式选择能容纳的最大网格；显式尺寸放不下则报错。所有模式网格上限为 1,048,576 个字符。
-
-TXT 固定为 UTF-8 无 BOM，每行 LF（包括最后一行），保留行尾空格，无 ANSI；文件不保存主题颜色，需在匹配的背景下查看。日志和错误只写 stderr。退出码为 0 成功、2 参数/配置错误、1 运行错误、130 用户中断。完整冲突规则、布局和背景契约见 [设计文档](docs/design.md)。
-
-## 验收目标
-
-| 场景 | 预期 |
-| --- | --- |
-| 黑白渐变 | 输出字符覆盖率随目标覆盖率单调变化；反色方向正确 |
-| 空格、句点、密集字符 | 使用完整单元格归一化，空格密度为零；排序来自实际字体 |
-| 已知比例的圆形 | 网格比例按单元格宽高修正，行数与设计公式一致 |
-| 非整数采样边界 | 使用覆盖面积权重，常量图像缩放后亮度保持不变 |
-| 重复运行同一输入 | 固定配置下字符选择可重复，不依赖容器迭代顺序 |
-| 变帧率视频、末尾延迟帧 | 按显示时间戳播放，EOF 排空解码器；不积累固定 sleep 误差 |
-| 帧延迟与场景切换 | 预览允许跳过过期显示；迟滞不阻止显著变化 |
-| 无效媒体、缺字、终端过小、用户中断 | 明确报错或安全退出，恢复光标及颜色 |
-| 参数冲突、TXT 自动列数、现存输出文件 | 明确拒绝，不静默降级或覆盖 |
-| 透明图像与主题切换 | 合成背景、映射极性与输出主题一致，完全透明块为空格 |
-| TXT 字节格式 | 无 BOM/CR/ANSI，每行保留 C 个字符并以 LF 结束 |
-
-以上是未来实现的验收清单，本次尚未运行功能测试。
-
-## 首版之外
-
-彩色输出、空间形状匹配、MP4 导出、音频同步、GUI、GPU、HDR 色调映射、非等宽字体、网络媒体和磁盘字体缓存均留待后续。黑底白字 PNG 导出已作为增量功能实现。
-
-## 项目目录结构
-
-以下为规划中的完整结构；当前已有部分核心模块及上述最小入口，实际文件以仓库为准。
+## Project Structure
 
 ```text
 Asciixel/
-├── CMakeLists.txt
-├── README.md
-├── docs/
-│   ├── design.md
-│   └── design-review.md
-├── include/asciixel/
-│   ├── model/                      # 普通数据结构，不暴露第三方类型
-│   │   ├── image.hpp
-│   │   ├── font_profile.hpp
-│   │   ├── ascii_frame.hpp
-│   │   └── error.hpp
-│   ├── core/                       # 可独立测试的核心算法
-│   │   ├── grid_layout.hpp
-│   │   ├── glyph_analyzer.hpp
-│   │   ├── block_sampler.hpp
-│   │   ├── tone_mapper.hpp
-│   │   ├── glyph_matcher.hpp
-│   │   └── temporal_stabilizer.hpp
-│   ├── ports/                      # 外部能力接口
-│   │   ├── media_source.hpp
-│   │   ├── font_rasterizer.hpp
-│   │   ├── frame_sink.hpp
-│   │   └── clock.hpp
-│   └── app/                        # 转换任务与播放流程
-│       ├── config.hpp
-│       ├── font_profile_builder.hpp
-│       ├── frame_converter.hpp
-│       ├── playback_scheduler.hpp
-│       └── conversion_session.hpp
+├── CMakeLists.txt          # Build and test configuration
+├── include/asciixel/      # Headers: app, config, core, io, model
 ├── src/
-│   ├── core/                       # core 头文件对应的实现
-│   ├── app/                        # 编排、缓存与播放状态
-│   ├── adapters/
-│   │   ├── ffmpeg/
-│   │   │   ├── media_source.cpp
-│   │   │   ├── decoder.cpp
-│   │   │   ├── frame_normalizer.cpp
-│   │   │   └── ffmpeg_raii.hpp
-│   │   ├── freetype/
-│   │   │   ├── font_rasterizer.cpp
-│   │   │   └── freetype_raii.hpp
-│   │   ├── terminal/
-│   │   │   ├── terminal_sink.cpp
-│   │   │   └── terminal_session.cpp
-│   │   ├── text/
-│   │   │   └── text_sink.cpp
-│   │   └── system/
-│   │       └── steady_clock.cpp
-│   └── cli/
-│       ├── main.cpp
-│       └── arguments.cpp
-└── tests/
-    ├── core/
-    ├── app/
-    ├── integration/
-    └── fixtures/
+│   ├── main.cpp           # CLI entry point and output dispatch
+│   ├── app/               # Single-frame conversion orchestration
+│   ├── config/            # Defaults, option mapping, and validation
+│   ├── core/              # Font calibration, grid, sampling, matching, rendering
+│   └── io/                # Argument parsing, decoding, normalization, file output
+├── tests/                 # Unit tests, CLI tests, and fixtures
+├── scripts/               # FFmpeg build scripts
+├── third_party/           # FFmpeg and FreeType
+├── examples/              # Sample images and output examples
+└── docs/                  # Design documents and review history
 ```
-
-### 分层职责
-
-| 层 | 职责 | 依赖约束 |
-| --- | --- | --- |
-| Model | 图像、字形、字体配置、字符帧与错误 | 普通 C++ 类型，无第三方库类型 |
-| Core | 网格、覆盖率、分块采样、色调映射、匹配与迟滞 | 依赖 Model；不读文件、不打印、不等待 |
-| Ports | 媒体源、字体栅格化、输出和时钟接口 | 使用 Model 传递数据 |
-| Adapters | 实现 Ports，封装外部库及平台资源 | FFmpeg、FreeType 和终端细节留在适配器内 |
-| Application | 流程编排、字体缓存、调度、取消与错误传播 | 依赖 Core、Ports，不直接调用外部库 |
-| CLI | 参数解析、适配器创建与注入、退出码 | 组装 Application 和 Adapters，不实现图像算法 |
-
-FFmpeg 适配器内部保留解码与归一化两个职责，对应用输出统一的 `LinearImage`。字体适配器输出统一布局的字形掩模，由核心算法计算覆盖率。基础匹配无状态，视频历史仅由 `TemporalStabilizer` 保存；调度器控制时间，输出器只负责绘制。
-
-### 构建目标
-
-| CMake Target | 内容 | 依赖 |
-| --- | --- | --- |
-| `asciixel_core` | Model、Core | C++ 标准库 |
-| `asciixel_app` | Ports、Application | `asciixel_core` |
-| `asciixel_adapters` | 首版外部适配器 | Core、Ports、FFmpeg、FreeType、平台 API |
-| `asciixel` | CLI 可执行程序 | App、Adapters |
-
-算法测试只链接核心库；应用测试使用假时钟和内存媒体源；真实解码与终端恢复放入集成测试。接口头文件与适配器工厂声明可在实现时按需要补充，不要求每个小结构单独建文件。
-
-## 设计文档
-
-- [核心设计与接口约束](docs/design.md)
-- [设计审查与修订记录](docs/design-review.md)
-
-实现顺序：字体标定和纯映射算法 → 图片/TXT → 终端 → 视频时间轴与迟滞。依赖版本和构建命令将在实际接入并验证后补充。
