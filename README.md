@@ -64,6 +64,17 @@ Currently, the program uses a default font path(Linux: `/usr/share/fonts/truetyp
 
 Currently supports static JPG and PNG images, with terminal, PNG, or TXT output. Video is not yet supported.
 
+The library provides sequential MP4/MOV H.264 decoding through `VideoLoader`
+in `asciixel/io/video_loader.hpp`. `nextFrame()` returns an owned `VideoFrame`
+containing an `ImageFrame` and optional source presentation timestamp and
+duration in microseconds. It returns `std::nullopt` after draining delayed
+frames. Source times are not rebased or synthesized, and audio packets are
+skipped. The CLI does not yet dispatch video input.
+
+Video pixels currently reuse the image normalizer's sRGB conversion. Video
+color metadata, HDR, rotation and sample aspect ratio handling are not yet
+implemented; correct display of those inputs is not guaranteed.
+
 | Argument | Default | Description |
 | --- | --- | --- |
 | `<image-path>` | Required | Path to a single input image |

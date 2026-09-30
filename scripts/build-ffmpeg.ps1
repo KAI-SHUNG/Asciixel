@@ -34,8 +34,8 @@ $configure = "'$sourcePath/configure' --prefix='$installPath' " +
     '--disable-autodetect --disable-everything --enable-shared --disable-static ' +
     '--disable-programs --disable-doc --disable-x86asm --disable-network ' +
     '--enable-avformat --enable-avcodec --enable-swscale ' +
-    '--enable-decoder=png,mjpeg --enable-encoder=png --enable-demuxer=image2,png_pipe,jpeg_pipe ' +
-    '--enable-protocol=file --enable-parser=png,mjpeg --enable-zlib ' +
+    '--enable-decoder=png,mjpeg,h264 --enable-encoder=png --enable-demuxer=image2,png_pipe,jpeg_pipe,mov,wav ' +
+    '--enable-protocol=file --enable-parser=png,mjpeg,h264 --enable-zlib ' +
     "--extra-cflags=-I$mingwPath/include --extra-ldflags=-L$mingwPath/lib"
 
 & $bash -lc "cd '$buildPath' && $configure"

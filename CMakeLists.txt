@@ -30,6 +30,7 @@ add_library(asciixel_core STATIC
 	src/config/config_builder.cpp
 	src/io/arg_parser.cpp
 	src/io/image_loader.cpp
+	src/io/video_loader.cpp
 	src/io/frame_normalizer.cpp
 	src/io/png_writer.cpp
 	src/io/text_writer.cpp
@@ -65,6 +66,22 @@ endif()
 include(CTest)
 
 if(BUILD_TESTING)
+    add_executable(test_video_loader tests/test_video_loader.cpp)
+    target_link_libraries(test_video_loader PRIVATE asciixel_core)
+    if(WIN32 AND FFMPEG_RUNTIME_DLLS)
+        set_property(TARGET test_video_loader APPEND PROPERTY LINK_DEPENDS
+            ${FFMPEG_RUNTIME_DLLS})
+        add_custom_command(TARGET test_video_loader POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FFMPEG_RUNTIME_DLLS}
+                $<TARGET_FILE_DIR:test_video_loader>
+            COMMAND_EXPAND_LISTS)
+    endif()
+    add_test(NAME video_loader COMMAND test_video_loader
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/video_bframes.mp4"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/audio_only.wav"
+        "${CMAKE_CURRENT_SOURCE_DIR}/CMakeLists.txt"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/video_audio.mp4"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/red_green.png")
     add_executable(test_frame_converter tests/test_frame_converter.cpp)
     target_link_libraries(test_frame_converter PRIVATE asciixel_core)
     add_test(NAME frame_converter COMMAND test_frame_converter)

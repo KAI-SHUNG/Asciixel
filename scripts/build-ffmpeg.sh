@@ -25,9 +25,9 @@ cd "$build_dir"
     --disable-programs --disable-doc --disable-network \
     --disable-x86asm \
     --enable-avformat --enable-avcodec --enable-swscale \
-    --enable-decoder=png,mjpeg --enable-encoder=png \
-    --enable-demuxer=image2,png_pipe,jpeg_pipe \
-    --enable-protocol=file --enable-parser=png,mjpeg \
+    --enable-decoder=png,mjpeg,h264 --enable-encoder=png \
+    --enable-demuxer=image2,png_pipe,jpeg_pipe,mov,wav \
+    --enable-protocol=file --enable-parser=png,mjpeg,h264 \
     --enable-zlib
 
 make -j"$jobs"
