@@ -35,12 +35,12 @@ Argument& Argument::set_required(bool req)
 
 // ArgParser member functions
 
-bool ArgParser::isRegistered(const std::string& name) const
+bool ArgParser::is_registered(const std::string& name) const
 {
     return name_to_arg.count(name) > 0;
 }
 
-void ArgParser::checkRequiredArguments() const
+void ArgParser::check_required_arguments() const
 {
     for (const auto& arg : registery) {
         if (arg->required && !has(arg->name)) {
@@ -49,7 +49,7 @@ void ArgParser::checkRequiredArguments() const
     }
 }
 
-std::vector<std::string> ArgParser::normalizeArgs(int argc, char** argv)
+std::vector<std::string> ArgParser::normalize_args(int argc, char** argv)
 {
     std::vector<std::string> args;
     args.reserve(argc > 1 ? argc - 1 : 0);
@@ -62,7 +62,7 @@ std::vector<std::string> ArgParser::normalizeArgs(int argc, char** argv)
 }
 
 #ifdef _WIN32
-std::string ArgParser::toUtf8(const wchar_t* value)
+std::string ArgParser::to_utf8(const wchar_t* value)
 {
     // Query the required buffer length, including the terminating null byte.
     const int length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
@@ -82,13 +82,13 @@ std::string ArgParser::toUtf8(const wchar_t* value)
     return utf8;
 }
 
-std::vector<std::string> ArgParser::normalizeArgs(int argc, wchar_t** argv)
+std::vector<std::string> ArgParser::normalize_args(int argc, wchar_t** argv)
 {
     std::vector<std::string> args;
     args.reserve(argc > 1 ? argc - 1 : 0);
 
     for (int i = 1; i < argc; ++i) {
-        args.emplace_back(toUtf8(argv[i]));
+        args.emplace_back(to_utf8(argv[i]));
     }
 
     return args;
@@ -105,10 +105,10 @@ Argument& ArgParser::add_argument(
         throw std::invalid_argument("Argument name must not be empty");
     }
     // Validate that the argument name and alias are not already registered.
-    if (isRegistered(name)) {
+    if (is_registered(name)) {
         throw std::invalid_argument("Argument already registered: " + name);
     }
-    if (alias.has_value() && isRegistered(alias.value())) {
+    if (alias.has_value() && is_registered(alias.value())) {
         throw std::invalid_argument("Argument already registered: " + alias.value());
     }
 
@@ -134,7 +134,7 @@ Argument& ArgParser::add_argument(
 
 bool ArgParser::has(const std::string& name) const
 {
-    if (!isRegistered(name)) {
+    if (!is_registered(name)) {
         return false;
     }
 
@@ -166,21 +166,21 @@ void ArgParser::help() const
     }
 }
 
-void ArgParser::Parse(int argc, char** argv)
+void ArgParser::parse(int argc, char** argv)
 {
-    auto args = normalizeArgs(argc, argv);
-    Parse(args);
+    auto args = normalize_args(argc, argv);
+    parse(args);
 }
 
 #ifdef _WIN32
-void ArgParser::Parse(int argc, wchar_t** argv)
+void ArgParser::parse(int argc, wchar_t** argv)
 {
-    auto args = normalizeArgs(argc, argv);
-    Parse(args);
+    auto args = normalize_args(argc, argv);
+    parse(args);
 }
 #endif
 
-void ArgParser::Parse(const std::vector<std::string>& args)
+void ArgParser::parse(const std::vector<std::string>& args)
 {
     bool        options_ended    = false;
     std::size_t positional_index = 0;
@@ -219,7 +219,7 @@ void ArgParser::Parse(const std::vector<std::string>& args)
         name = arg.substr(
             start_index,
             (equals_sign ? arg.find('=') : arg.size()) - start_index);
-        if (!isRegistered(name)) {
+        if (!is_registered(name)) {
             throw std::invalid_argument("Unrecognized argument: " + arg);
         }
         // Check if the argument name or alias has already been provided.
@@ -258,7 +258,7 @@ void ArgParser::Parse(const std::vector<std::string>& args)
     }
 
     // Check for required arguments after parsing all inputs.
-    checkRequiredArguments();
+    check_required_arguments();
 };
 
 } // namespace asciixel

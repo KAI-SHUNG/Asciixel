@@ -40,10 +40,10 @@ private:
     std::string program_name = "";
     std::string note         = "";
 
-    bool isRegistered(const std::string& name) const;
-    void checkRequiredArguments() const;
+    bool is_registered(const std::string& name) const;
+    void check_required_arguments() const;
 
-    static std::vector<std::string> normalizeArgs(int argc, char** argv);
+    static std::vector<std::string> normalize_args(int argc, char** argv);
 #ifdef _WIN32
     /**
      * @brief Encode one Windows command-line argument as UTF-8.
@@ -52,21 +52,21 @@ private:
      *
      * @return UTF-8 string without its terminating null byte.
      */
-    static std::string              toUtf8(const wchar_t* value);
-    static std::vector<std::string> normalizeArgs(int argc, wchar_t** argv);
+    static std::string              to_utf8(const wchar_t* value);
+    static std::vector<std::string> normalize_args(int argc, wchar_t** argv);
 #endif
 
 public:
     /**
      * @brief Set the program name for usage messages.
      */
-    void setProgramName(const std::string& name)
+    void set_program_name(const std::string& name)
     { program_name = name; }
 
     /**
      * @brief Set a note to be displayed after the help message.
      */
-    void setNote(const std::string& n)
+    void set_note(const std::string& n)
     { note = n; }
 
     /**
@@ -106,21 +106,21 @@ public:
     T get(const std::string& name) const;
 
     /**
-     * @brief Parse command-line arguments.
+     * @brief parse command-line arguments.
      */
-    void Parse(int argc, char** argv);
+    void parse(int argc, char** argv);
 
 #ifdef _WIN32
     /**
-     * @brief Parse command-line arguments (Windows version).
+     * @brief parse command-line arguments (Windows version).
      */
-    void Parse(int argc, wchar_t** argv);
+    void parse(int argc, wchar_t** argv);
 #endif
 
     /**
-     * @brief Parse normalized command-line arguments.
+     * @brief parse normalized command-line arguments.
      */
-    void Parse(const std::vector<std::string>& args);
+    void parse(const std::vector<std::string>& args);
 };
 
 } // namespace asciixel
@@ -131,7 +131,7 @@ template <typename T>
 T asciixel::ArgParser::get(const std::string& name) const
 {
     // Handle the case where the argument is not registered.
-    if (!isRegistered(name)) {
+    if (!is_registered(name)) {
         throw std::invalid_argument("Argument not registered: " + name);
     }
 
@@ -171,7 +171,7 @@ template <>
 inline std::string asciixel::ArgParser::get<std::string>(const std::string& name) const
 {
     // Handle the case where the argument is not registered.
-    if (!isRegistered(name)) {
+    if (!is_registered(name)) {
         throw std::invalid_argument("Argument not registered: " + name);
     }
 
@@ -192,7 +192,7 @@ template <>
 inline bool asciixel::ArgParser::get<bool>(const std::string& name) const
 {
     // Handle the case where the argument is not registered.
-    if (!isRegistered(name)) {
+    if (!is_registered(name)) {
         throw std::invalid_argument("Argument not registered: " + name);
     }
 

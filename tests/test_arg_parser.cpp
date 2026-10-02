@@ -37,7 +37,7 @@ void testBasicBehavior() {
         parser.add_argument("output", "o", ArgType::Option);
         parser.add_argument("columns", std::nullopt, ArgType::Option).set_default("200");
         parser.add_argument("help", "h", ArgType::Flag);
-        parser.Parse({"photo.png", "-o", "out.txt", "-h"});
+        parser.parse({"photo.png", "-o", "out.txt", "-h"});
         require(parser.has("input") && parser.get<std::string>("input") == "photo.png");
         require(parser.has("output") && parser.get<std::string>("output") == "out.txt");
         require(parser.has("help") && parser.get<std::string>("help") == "true");
@@ -50,7 +50,7 @@ void testBasicBehavior() {
         ArgParser parser;
         parser.add_argument("output", "o", ArgType::Option).set_default("default.png");
         parser.add_argument("font", std::nullopt, ArgType::Option);
-        parser.Parse(std::vector<std::string>{});
+        parser.parse(std::vector<std::string>{});
         require(!parser.has("output") && parser.get<std::string>("output") == "default.png");
         requireInvalidArgument([&] { parser.get<std::string>("font"); }, "Argument not provided: font");
     }
@@ -59,7 +59,7 @@ void testBasicBehavior() {
         {"--output", "dir/a=b.png"}, {"-o", "dir/a=b.png"}}) {
         ArgParser parser;
         parser.add_argument("output", "o", ArgType::Option);
-        parser.Parse(args);
+        parser.parse(args);
         require(parser.has("output") && parser.get<std::string>("output") == "dir/a=b.png");
     }
     // Explicit empty option values are rejected, even when a default exists.
@@ -67,7 +67,7 @@ void testBasicBehavior() {
         {"--output="}, {"-o", ""}}) {
         ArgParser parser;
         parser.add_argument("output", "o", ArgType::Option).set_default("default.png");
-        requireInvalidArgument([&] { parser.Parse(args); },
+        requireInvalidArgument([&] { parser.parse(args); },
                                "Missing value for argument: " + args.front());
     }
     {
@@ -75,7 +75,7 @@ void testBasicBehavior() {
         parser.add_argument("first");
         parser.add_argument("second");
         parser.add_argument("third");
-        parser.Parse({"", "--", "-photo.png", "--"});
+        parser.parse({"", "--", "-photo.png", "--"});
         require(parser.has("first") && parser.get<std::string>("first").empty());
         require(parser.get<std::string>("second") == "-photo.png");
         require(parser.get<std::string>("third") == "--");
@@ -84,14 +84,14 @@ void testBasicBehavior() {
         ArgParser parser;
         parser.add_argument("count", "c", ArgType::Option);
         parser.add_argument("ratio", std::nullopt, ArgType::Option);
-        parser.Parse({"-c=-12", "--ratio=1.5"});
+        parser.parse({"-c=-12", "--ratio=1.5"});
         require(parser.get<int>("count") == -12);
         require(parser.get<double>("ratio") == 1.5);
     }
     for (const auto& value : {"12x", "not-a-number", "999999999999999999999999"}) {
         ArgParser parser;
         parser.add_argument("count", std::nullopt, ArgType::Option);
-        parser.Parse({"--count", value});
+        parser.parse({"--count", value});
         const std::string expected = std::string(value) == "12x"
             ? "Invalid value for argument 'count': '12x'"
             : "Failed to convert argument 'count' with value '" + std::string(value) + "'";
@@ -105,22 +105,22 @@ void testBasicBehavior() {
     }
     {
         ArgParser parser;
-        requireInvalidArgument([&] { parser.Parse({"--unknown"}); }, "Unrecognized argument: --unknown");
+        requireInvalidArgument([&] { parser.parse({"--unknown"}); }, "Unrecognized argument: --unknown");
     }
     {
         ArgParser parser;
         parser.add_argument("input");
-        requireInvalidArgument([&] { parser.Parse({"a", "b"}); }, "Unexpected positional argument: b");
+        requireInvalidArgument([&] { parser.parse({"a", "b"}); }, "Unexpected positional argument: b");
     }
     {
         ArgParser parser;
         parser.add_argument("output", "o", ArgType::Option);
-        requireInvalidArgument([&] { parser.Parse({"-o"}); }, "Missing value for argument: -o");
+        requireInvalidArgument([&] { parser.parse({"-o"}); }, "Missing value for argument: -o");
     }
     {
         ArgParser parser;
         parser.add_argument("input").set_default("default.png").set_required(true);
-        requireInvalidArgument([&] { parser.Parse(std::vector<std::string>{}); }, "Required argument not provided: input");
+        requireInvalidArgument([&] { parser.parse(std::vector<std::string>{}); }, "Required argument not provided: input");
     }
     // Native argv normalization skips the executable and preserves Unicode.
     {
@@ -135,13 +135,13 @@ void testBasicBehavior() {
         char input[] = "\xe5\x9b\xbe\xe7\x89\x87.png";
         char* argv[] = {program, input};
 #endif
-        parser.Parse(2, argv);
+        parser.parse(2, argv);
         require(parser.get<std::string>("input") == "\xe5\x9b\xbe\xe7\x89\x87.png");
     }
     {
         ArgParser parser;
-        parser.setProgramName("asciixel");
-        parser.setNote("Example usage");
+        parser.set_program_name("asciixel");
+        parser.set_note("Example usage");
         parser.add_argument("input").set_description("Input file");
         parser.add_argument("output", "o", ArgType::Option).set_description("Output file");
         parser.add_argument("help", "h", ArgType::Flag);
@@ -189,26 +189,26 @@ int main() {
     run("has supports canonical names and aliases", [] {
         ArgParser parser;
         parser.add_argument("output", "o", ArgType::Option);
-        parser.Parse({"-o=result.png"});
+        parser.parse({"-o=result.png"});
         require(parser.has("output") && parser.has("o"));
     });
     run("canonical get after alias input", [] {
         ArgParser parser;
         parser.add_argument("output", "o", ArgType::Option).set_default("default.png");
-        parser.Parse({"-o=result.png"});
+        parser.parse({"-o=result.png"});
         require(parser.get<std::string>("output") == "result.png");
     });
     run("canonical typed get after alias input", [] {
         ArgParser parser;
         parser.add_argument("count", "c", ArgType::Option).set_default("200");
-        parser.Parse({"-c=12"});
+        parser.parse({"-c=12"});
         require(parser.get<int>("count") == 12);
     });
     run("duplicate alias is rejected", [] {
         ArgParser parser;
         parser.add_argument("output", "o", ArgType::Option);
         requireRejected([&] { parser.add_argument("other", "o", ArgType::Option); });
-        parser.Parse({"-o=result.png"});
+        parser.parse({"-o=result.png"});
         require(parser.get<std::string>("output") == "result.png");
     });
     run("alias cannot shadow a canonical name", [] {
@@ -227,21 +227,21 @@ int main() {
         run("duplicate option " + args.front() + " then " + args.back(), [args] {
             ArgParser parser;
             parser.add_argument("output", "o", ArgType::Option);
-            requireInvalidArgument([&] { parser.Parse(args); },
+            requireInvalidArgument([&] { parser.parse(args); },
                                    "Argument already provided: " + args.back());
         });
     }
     run("duplicate flag through alias is rejected", [] {
         ArgParser parser;
         parser.add_argument("help", "h", ArgType::Flag);
-        requireInvalidArgument([&] { parser.Parse({"--help", "-h"}); },
+        requireInvalidArgument([&] { parser.parse({"--help", "-h"}); },
                                "Argument already provided: -h");
     });
     for (const auto& token : {"--help=false", "--help="}) {
         run(std::string("flag rejects value ") + token, [token] {
             ArgParser parser;
             parser.add_argument("help", "h", ArgType::Flag);
-            requireInvalidArgument([&] { parser.Parse({token}); },
+            requireInvalidArgument([&] { parser.parse({token}); },
                                    "Flag argument cannot have a value: " + std::string(token));
         });
     }
@@ -249,13 +249,13 @@ int main() {
         ArgParser parser;
         parser.add_argument("output", "o", ArgType::Option);
         parser.add_argument("help", "h", ArgType::Flag);
-        requireInvalidArgument([&] { parser.Parse({"--output", "--help"}); },
+        requireInvalidArgument([&] { parser.parse({"--output", "--help"}); },
                                "Missing value for argument: --output");
     });
     run("inline dashed value is accepted", [] {
         ArgParser parser;
         parser.add_argument("output", "o", ArgType::Option);
-        parser.Parse({"--output=-result.png"});
+        parser.parse({"--output=-result.png"});
         require(parser.get<std::string>("output") == "-result.png");
     });
     run("same-name alias does not bypass duplicate registration", [] {
@@ -267,10 +267,10 @@ int main() {
     run("fresh argument can use its own name as alias", [] {
         ArgParser parser;
         parser.add_argument("output", "output", ArgType::Option);
-        parser.Parse({"--output=result.png"});
+        parser.parse({"--output=result.png"});
         require(parser.has("output") && parser.get<std::string>("output") == "result.png");
     });
-    // The supported lifetime is one Parse call per parser instance.
+    // The supported lifetime is one parse call per parser instance.
     for (const auto& args : std::vector<std::vector<std::string>>{
         {"--output"}, {"--output="}, {"--output", ""}, {"--output", "--help"},
         {"--output", "--"}, {"--output", "-12"}, {"--output", "-file.png"}}) {
@@ -278,7 +278,7 @@ int main() {
             ArgParser parser;
             parser.add_argument("output", "o", ArgType::Option).set_default("default.png");
             parser.add_argument("help", "h", ArgType::Flag);
-            requireInvalidArgument([&] { parser.Parse(args); },
+            requireInvalidArgument([&] { parser.parse(args); },
                                    "Missing value for argument: " + args.front());
             require(!parser.has("output"));
             require(parser.get<std::string>("output") == "default.png");
@@ -288,7 +288,7 @@ int main() {
         run(std::string("positional rejects option syntax: ") + token, [token] {
             ArgParser parser;
             parser.add_argument("input", "i");
-            requireInvalidArgument([&] { parser.Parse({token}); },
+            requireInvalidArgument([&] { parser.parse({token}); },
                 "Positional argument cannot be provided as an option: " + std::string(token));
             require(!parser.has("input"));
         });
@@ -296,14 +296,14 @@ int main() {
     for (const auto& token : {"--unknown", "--unknown=value", "-x", "-"}) {
         run(std::string("unknown option: ") + token, [token] {
             ArgParser parser;
-            requireInvalidArgument([&] { parser.Parse({token}); },
+            requireInvalidArgument([&] { parser.parse({token}); },
                                    "Unrecognized argument: " + std::string(token));
         });
     }
     run("Flag bool and string retrieval", [] {
         ArgParser parser;
         parser.add_argument("help", "h", ArgType::Flag);
-        parser.Parse({"-h"});
+        parser.parse({"-h"});
         require(parser.has("help") && parser.has("h"));
         require(parser.get<bool>("help"));
         require(parser.get<std::string>("help") == "true");
@@ -312,45 +312,45 @@ int main() {
         ArgParser parser;
         parser.add_argument("enabled", std::nullopt, ArgType::Flag).set_default("true");
         parser.add_argument("disabled", std::nullopt, ArgType::Flag).set_default("false");
-        parser.Parse(std::vector<std::string>{});
+        parser.parse(std::vector<std::string>{});
         require(!parser.has("enabled") && parser.get<bool>("enabled"));
         require(!parser.has("disabled") && !parser.get<bool>("disabled"));
     });
     run("missing bool has an exact diagnostic", [] {
         ArgParser parser;
         parser.add_argument("help", "h", ArgType::Flag);
-        parser.Parse(std::vector<std::string>{});
+        parser.parse(std::vector<std::string>{});
         requireInvalidArgument([&] { parser.get<bool>("help"); }, "Argument not provided: help");
         requireInvalidArgument([&] { parser.get<bool>("unknown"); }, "Argument not registered: unknown");
     });
     run("string specialization preserves spaces", [] {
         ArgParser parser;
         parser.add_argument("font", std::nullopt, ArgType::Option);
-        parser.Parse({"--font", " custom font.ttf "});
+        parser.parse({"--font", " custom font.ttf "});
         require(parser.get<std::string>("font") == " custom font.ttf ");
     });
     run("empty positional default stays absent", [] {
         ArgParser parser;
         parser.add_argument("input").set_default("");
-        parser.Parse(std::vector<std::string>{});
+        parser.parse(std::vector<std::string>{});
         require(!parser.has("input") && parser.get<std::string>("input").empty());
     });
     run("required option is not satisfied by a default", [] {
         ArgParser parser;
         parser.add_argument("output", "o", ArgType::Option).set_default("default.png").set_required(true);
-        requireInvalidArgument([&] { parser.Parse(std::vector<std::string>{}); },
+        requireInvalidArgument([&] { parser.parse(std::vector<std::string>{}); },
                                "Required argument not provided: output");
     });
     run("required option accepts alias input", [] {
         ArgParser parser;
         parser.add_argument("output", "o", ArgType::Option).set_required(true);
-        parser.Parse({"-o=result.png"});
+        parser.parse({"-o=result.png"});
         require(parser.has("output") && parser.get<std::string>("output") == "result.png");
     });
     run("required Flag can be provided", [] {
         ArgParser parser;
         parser.add_argument("confirm", "y", ArgType::Flag).set_required(true);
-        parser.Parse({"-y"});
+        parser.parse({"-y"});
         require(parser.has("confirm") && parser.get<bool>("confirm"));
     });
     run("mixed positionals and options retain order", [] {
@@ -358,7 +358,7 @@ int main() {
         parser.add_argument("first");
         parser.add_argument("second");
         parser.add_argument("count", "c", ArgType::Option);
-        parser.Parse({"one", "-c=12", "two"});
+        parser.parse({"one", "-c=12", "two"});
         require(parser.get<std::string>("first") == "one");
         require(parser.get<std::string>("second") == "two");
         require(parser.get<int>("count") == 12);

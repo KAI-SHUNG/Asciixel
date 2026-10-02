@@ -26,7 +26,7 @@ int main(int argc, char** argv)
         return 1;
     }
     try {
-        parser.Parse(argc, argv);
+        parser.parse(argc, argv);
     }
     catch (const std::exception& error) {
         std::cerr << "Failed to parse arguments: " << error.what() << '\n';
