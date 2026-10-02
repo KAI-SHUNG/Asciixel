@@ -1,167 +1,368 @@
 #include "asciixel/io/arg_parser.hpp"
-#include "asciixel/config/config_builder.hpp"
-#include <stdexcept>
+
 #include <cstdio>
 #include <cstdlib>
-#include <filesystem>
+#include <functional>
+#include <iostream>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 void requireAt(bool ok, int line) {
     if (!ok) {
         std::fprintf(stderr, "argument parser assertion failed at line %d\n", line);
-        std::exit(1);
+        throw std::runtime_error("Assertion failed at line " + std::to_string(line));
     }
 }
 #define require(ok) requireAt((ok), __LINE__)
 
-asciixel::Config buildParsedConfig(const asciixel::ParsedArguments& arguments) {
-    if (arguments.help || arguments.positional.size() != 1)
-        throw std::invalid_argument("Expected one input");
-    auto values = arguments.options;
-    values.emplace("input", arguments.positional.front());
-    return asciixel::buildConfig(values);
+template <typename F>
+void requireInvalidArgument(F action, const std::string& message) {
+    try { action(); }
+    catch (const std::invalid_argument& error) {
+        if (std::string(error.what()) != message) {
+            throw std::runtime_error("Expected error [" + message + "] but got [" + error.what() + "]");
+        }
+        return;
+    }
+    throw std::runtime_error("Expected std::invalid_argument: " + message);
 }
 
-// Exercise the complete CLI-to-config pipeline for existing behavior checks.
-std::variant<asciixel::Config, asciixel::ParseError> parseConfig(
-    const std::vector<std::string>& args) {
+void testBasicBehavior() {
     using namespace asciixel;
-    const auto parsed = parseArguments(args);
-    if (const auto* error = std::get_if<ParseError>(&parsed)) return *error;
-    try {
-        return resolveConfig(buildParsedConfig(std::get<ParsedArguments>(parsed)));
-    } catch (const std::invalid_argument& error) {
-        return ParseError{error.what()};
+    {
+        ArgParser parser;
+        parser.add_argument("input").set_required(true);
+        parser.add_argument("output", "o", ArgType::Option);
+        parser.add_argument("columns", std::nullopt, ArgType::Option).set_default("200");
+        parser.add_argument("help", "h", ArgType::Flag);
+        parser.Parse({"photo.png", "-o", "out.txt", "-h"});
+        require(parser.has("input") && parser.get<std::string>("input") == "photo.png");
+        require(parser.has("output") && parser.get<std::string>("output") == "out.txt");
+        require(parser.has("help") && parser.get<std::string>("help") == "true");
+        require(!parser.has("columns") && parser.get<int>("columns") == 200);
+        require(!parser.has("unknown"));
+        requireInvalidArgument([&] { parser.get<std::string>("unknown"); }, "Argument not registered: unknown");
     }
+    // Defaults do not count as explicitly provided arguments.
+    {
+        ArgParser parser;
+        parser.add_argument("output", "o", ArgType::Option).set_default("default.png");
+        parser.add_argument("font", std::nullopt, ArgType::Option);
+        parser.Parse(std::vector<std::string>{});
+        require(!parser.has("output") && parser.get<std::string>("output") == "default.png");
+        requireInvalidArgument([&] { parser.get<std::string>("font"); }, "Argument not provided: font");
+    }
+    for (const auto& args : std::vector<std::vector<std::string>>{
+        {"--output=dir/a=b.png"}, {"-o=dir/a=b.png"},
+        {"--output", "dir/a=b.png"}, {"-o", "dir/a=b.png"}}) {
+        ArgParser parser;
+        parser.add_argument("output", "o", ArgType::Option);
+        parser.Parse(args);
+        require(parser.has("output") && parser.get<std::string>("output") == "dir/a=b.png");
+    }
+    // Explicit empty option values are rejected, even when a default exists.
+    for (const auto& args : std::vector<std::vector<std::string>>{
+        {"--output="}, {"-o", ""}}) {
+        ArgParser parser;
+        parser.add_argument("output", "o", ArgType::Option).set_default("default.png");
+        requireInvalidArgument([&] { parser.Parse(args); },
+                               "Missing value for argument: " + args.front());
+    }
+    {
+        ArgParser parser;
+        parser.add_argument("first");
+        parser.add_argument("second");
+        parser.add_argument("third");
+        parser.Parse({"", "--", "-photo.png", "--"});
+        require(parser.has("first") && parser.get<std::string>("first").empty());
+        require(parser.get<std::string>("second") == "-photo.png");
+        require(parser.get<std::string>("third") == "--");
+    }
+    {
+        ArgParser parser;
+        parser.add_argument("count", "c", ArgType::Option);
+        parser.add_argument("ratio", std::nullopt, ArgType::Option);
+        parser.Parse({"-c=-12", "--ratio=1.5"});
+        require(parser.get<int>("count") == -12);
+        require(parser.get<double>("ratio") == 1.5);
+    }
+    for (const auto& value : {"12x", "not-a-number", "999999999999999999999999"}) {
+        ArgParser parser;
+        parser.add_argument("count", std::nullopt, ArgType::Option);
+        parser.Parse({"--count", value});
+        const std::string expected = std::string(value) == "12x"
+            ? "Invalid value for argument 'count': '12x'"
+            : "Failed to convert argument 'count' with value '" + std::string(value) + "'";
+        requireInvalidArgument([&] { parser.get<int>("count"); }, expected);
+    }
+    {
+        ArgParser parser;
+        requireInvalidArgument([&] { parser.add_argument(""); }, "Argument name must not be empty");
+        parser.add_argument("input");
+        requireInvalidArgument([&] { parser.add_argument("input"); }, "Argument already registered: input");
+    }
+    {
+        ArgParser parser;
+        requireInvalidArgument([&] { parser.Parse({"--unknown"}); }, "Unrecognized argument: --unknown");
+    }
+    {
+        ArgParser parser;
+        parser.add_argument("input");
+        requireInvalidArgument([&] { parser.Parse({"a", "b"}); }, "Unexpected positional argument: b");
+    }
+    {
+        ArgParser parser;
+        parser.add_argument("output", "o", ArgType::Option);
+        requireInvalidArgument([&] { parser.Parse({"-o"}); }, "Missing value for argument: -o");
+    }
+    {
+        ArgParser parser;
+        parser.add_argument("input").set_default("default.png").set_required(true);
+        requireInvalidArgument([&] { parser.Parse(std::vector<std::string>{}); }, "Required argument not provided: input");
+    }
+    // Native argv normalization skips the executable and preserves Unicode.
+    {
+        ArgParser parser;
+        parser.add_argument("input");
+#ifdef _WIN32
+        wchar_t program[] = L"asciixel";
+        wchar_t input[] = L"\u56fe\u7247.png";
+        wchar_t* argv[] = {program, input};
+#else
+        char program[] = "asciixel";
+        char input[] = "\xe5\x9b\xbe\xe7\x89\x87.png";
+        char* argv[] = {program, input};
+#endif
+        parser.Parse(2, argv);
+        require(parser.get<std::string>("input") == "\xe5\x9b\xbe\xe7\x89\x87.png");
+    }
+    {
+        ArgParser parser;
+        parser.setProgramName("asciixel");
+        parser.setNote("Example usage");
+        parser.add_argument("input").set_description("Input file");
+        parser.add_argument("output", "o", ArgType::Option).set_description("Output file");
+        parser.add_argument("help", "h", ArgType::Flag);
+        std::ostringstream output;
+        auto* previous = std::cout.rdbuf(output.rdbuf());
+        parser.help();
+        std::cout.rdbuf(previous);
+        require(output.str().find("Usage: asciixel [options] <input>") != std::string::npos);
+        require(output.str().find("--output, -o <value>") != std::string::npos);
+        require(output.str().find("Output file") != std::string::npos);
+        require(output.str().find("Example usage") != std::string::npos);
+    }
+}
+
+// Registration conflicts have no established diagnostic wording: require
+// invalid_argument and a nonempty diagnostic instead of inventing wording.
+template <typename F>
+void requireRejected(F action) {
+    try { action(); }
+    catch (const std::invalid_argument& error) {
+        require(std::string(error.what()).size() > 0);
+        return;
+    }
+    throw std::runtime_error("Expected std::invalid_argument, but operation succeeded");
 }
 
 int main() {
     using namespace asciixel;
-    const auto default_output = parseConfig({"dir/example.photo.jpg", "-o", "--columns", "80"});
-    require(std::holds_alternative<Config>(default_output));
-    const auto& default_config = std::get<Config>(default_output);
-    require(std::get<ImageConfig>(default_config.media_config).output == ImageOutput::Png);
-    require(std::filesystem::u8path(*std::get<ImageConfig>(default_config.media_config).output_path) == std::filesystem::u8path("dir/example.photo_asciixel.png"));
-    require(default_config.sampling.columns == 80);
-    require(std::holds_alternative<Config>(parseConfig({"a", "-o", "out.txt"})));
-    require(std::holds_alternative<ParseError>(parseArguments({"a", "--format", "png"})));
+    int failures = 0;
+    int total = 0;
+    auto run = [&](const std::string& name, const std::function<void()>& test) {
+        ++total;
+        try {
+            test();
+            std::printf("PASS %s\n", name.c_str());
+        } catch (const std::exception& error) {
+            ++failures;
+            std::fprintf(stderr, "FAIL %s: %s\n", name.c_str(), error.what());
+        } catch (...) {
+            ++failures;
+            std::fprintf(stderr, "FAIL %s: unexpected exception type\n", name.c_str());
+        }
+    };
+    run("basic behavior and exact diagnostics", testBasicBehavior);
+    run("has supports canonical names and aliases", [] {
+        ArgParser parser;
+        parser.add_argument("output", "o", ArgType::Option);
+        parser.Parse({"-o=result.png"});
+        require(parser.has("output") && parser.has("o"));
+    });
+    run("canonical get after alias input", [] {
+        ArgParser parser;
+        parser.add_argument("output", "o", ArgType::Option).set_default("default.png");
+        parser.Parse({"-o=result.png"});
+        require(parser.get<std::string>("output") == "result.png");
+    });
+    run("canonical typed get after alias input", [] {
+        ArgParser parser;
+        parser.add_argument("count", "c", ArgType::Option).set_default("200");
+        parser.Parse({"-c=12"});
+        require(parser.get<int>("count") == 12);
+    });
+    run("duplicate alias is rejected", [] {
+        ArgParser parser;
+        parser.add_argument("output", "o", ArgType::Option);
+        requireRejected([&] { parser.add_argument("other", "o", ArgType::Option); });
+        parser.Parse({"-o=result.png"});
+        require(parser.get<std::string>("output") == "result.png");
+    });
+    run("alias cannot shadow a canonical name", [] {
+        ArgParser parser;
+        parser.add_argument("output", "o", ArgType::Option);
+        requireRejected([&] { parser.add_argument("other", "output", ArgType::Option); });
+    });
+    run("canonical name cannot shadow an alias", [] {
+        ArgParser parser;
+        parser.add_argument("output", "o", ArgType::Option);
+        requireInvalidArgument([&] { parser.add_argument("o"); }, "Argument already registered: o");
+    });
     for (const auto& args : std::vector<std::vector<std::string>>{
-        {"a", "--output", "out.png"}, {"a", "--output", "out.PNG"},
-        {"a", "--output"}}) {
-        const auto result = parseConfig(args);
-        require(std::holds_alternative<Config>(result));
-        require(std::get<ImageConfig>(std::get<Config>(result).media_config).output == ImageOutput::Png);
+        {"--output=a.png", "--output=b.png"}, {"--output=a.png", "-o=b.png"},
+        {"-o=a.png", "--output=b.png"}, {"-o=a.png", "-o=b.png"}}) {
+        run("duplicate option " + args.front() + " then " + args.back(), [args] {
+            ArgParser parser;
+            parser.add_argument("output", "o", ArgType::Option);
+            requireInvalidArgument([&] { parser.Parse(args); },
+                                   "Argument already provided: " + args.back());
+        });
     }
+    run("duplicate flag through alias is rejected", [] {
+        ArgParser parser;
+        parser.add_argument("help", "h", ArgType::Flag);
+        requireInvalidArgument([&] { parser.Parse({"--help", "-h"}); },
+                               "Argument already provided: -h");
+    });
+    for (const auto& token : {"--help=false", "--help="}) {
+        run(std::string("flag rejects value ") + token, [token] {
+            ArgParser parser;
+            parser.add_argument("help", "h", ArgType::Flag);
+            requireInvalidArgument([&] { parser.Parse({token}); },
+                                   "Flag argument cannot have a value: " + std::string(token));
+        });
+    }
+    run("registered option is not consumed as a missing value", [] {
+        ArgParser parser;
+        parser.add_argument("output", "o", ArgType::Option);
+        parser.add_argument("help", "h", ArgType::Flag);
+        requireInvalidArgument([&] { parser.Parse({"--output", "--help"}); },
+                               "Missing value for argument: --output");
+    });
+    run("inline dashed value is accepted", [] {
+        ArgParser parser;
+        parser.add_argument("output", "o", ArgType::Option);
+        parser.Parse({"--output=-result.png"});
+        require(parser.get<std::string>("output") == "-result.png");
+    });
+    run("same-name alias does not bypass duplicate registration", [] {
+        ArgParser parser;
+        parser.add_argument("output", std::nullopt, ArgType::Option);
+        requireInvalidArgument([&] { parser.add_argument("output", "output", ArgType::Option); },
+                               "Argument already registered: output");
+    });
+    run("fresh argument can use its own name as alias", [] {
+        ArgParser parser;
+        parser.add_argument("output", "output", ArgType::Option);
+        parser.Parse({"--output=result.png"});
+        require(parser.has("output") && parser.get<std::string>("output") == "result.png");
+    });
+    // The supported lifetime is one Parse call per parser instance.
     for (const auto& args : std::vector<std::vector<std::string>>{
-        {"a", "--output=out.png"}, {"a", "-o", "out.png"},
-        {"a", "-o=out.png"}, {"a", "--font=custom.ttf", "--columns=80"}}) {
-        require(std::holds_alternative<Config>(parseConfig(args)));
+        {"--output"}, {"--output="}, {"--output", ""}, {"--output", "--help"},
+        {"--output", "--"}, {"--output", "-12"}, {"--output", "-file.png"}}) {
+        run("missing option value: " + (args.size() == 2 ? args.back() : args.front()), [args] {
+            ArgParser parser;
+            parser.add_argument("output", "o", ArgType::Option).set_default("default.png");
+            parser.add_argument("help", "h", ArgType::Flag);
+            requireInvalidArgument([&] { parser.Parse(args); },
+                                   "Missing value for argument: " + args.front());
+            require(!parser.has("output"));
+            require(parser.get<std::string>("output") == "default.png");
+        });
     }
-    require(std::get<ParsedArguments>(parseArguments({"-h"})).help);
-    for (const auto& args : std::vector<std::vector<std::string>>{
-        {"a", "-o", "-h"}, {"a", "--help=yes"},
-        {"a", "-o=x.png", "--output", "y.png"},
-        {"a", "--output=x.png", "-o", "y.png"}, {"a", "-f", "font.ttf"},
-        {"a", "-ox.png"}, {"-ho"}}) {
-        require(std::holds_alternative<ParseError>(parseArguments(args)));
+    for (const auto& token : {"--input=photo.png", "--input", "-i=photo.png"}) {
+        run(std::string("positional rejects option syntax: ") + token, [token] {
+            ArgParser parser;
+            parser.add_argument("input", "i");
+            requireInvalidArgument([&] { parser.Parse({token}); },
+                "Positional argument cannot be provided as an option: " + std::string(token));
+            require(!parser.has("input"));
+        });
     }
-    const auto bare = std::get<ParsedArguments>(parseArguments({"a", "-o"}));
-    require(bare.options.count("output") && !bare.options.at("output"));
-    require(std::get<ImageConfig>(resolveConfig(buildConfig({
-        {"input", "photo.jpg"}, {"output", std::nullopt}})).media_config).output_path == "photo_asciixel.png");
-    const auto txt = std::get<Config>(parseConfig({"a", "-o", "out.TXT"}));
-    require(std::get<ImageConfig>(txt.media_config).output == ImageOutput::Txt);
-    const auto gui = resolveConfig(buildConfig({
-        {"input", "photo.png"}, {"output", "gui.png"},
-        {"font", "custom font.ttf"}, {"font-size", "32"}, {"columns", "80"}}));
-    require(gui.input_path == "photo.png" && gui.charset.font_path == "custom font.ttf");
-    require(gui.charset.pixel_size == 32 && gui.sampling.columns == 80);
-    require(std::get<ImageConfig>(gui.media_config).output == ImageOutput::Png);
-    for (const auto& values : std::vector<ConfigValues>{
-        {}, {{"input", std::nullopt}}, {{"input", "a"}, {"font", std::nullopt}},
-        {{"input", "a"}, {"bogus", "x"}},
-        {{"input", "a"}, {"--font", "x"}},
-        {{"input", "a"}, {"font-size", "12x"}}}) {
-        bool rejected = false;
-        try { buildConfig(values); }
-        catch (const std::invalid_argument&) { rejected = true; }
-        require(rejected);
+    for (const auto& token : {"--unknown", "--unknown=value", "-x", "-"}) {
+        run(std::string("unknown option: ") + token, [token] {
+            ArgParser parser;
+            requireInvalidArgument([&] { parser.Parse({token}); },
+                                   "Unrecognized argument: " + std::string(token));
+        });
     }
-    const auto equals = std::get<ParsedArguments>(parseArguments({
-        "a", "--font=dir/a=b.ttf", "--output=", "--columns=-1"}));
-    require(equals.options.at("font") == "dir/a=b.ttf");
-    require(equals.options.at("output")->empty());
-    require(equals.options.at("columns") == "-1");
-    const auto dashed = std::get<ParsedArguments>(parseArguments({"a", "-o=-out.png"}));
-    require(dashed.options.at("output") == "-out.png");
-    const auto defaults = makeDefaultConfig();
-    const auto parsed = parseConfig({"photo.png"});
-    require(std::holds_alternative<Config>(parsed));
-    const auto& config = std::get<Config>(parsed);
-    require(config.input_path == "photo.png");
-    require(config.charset.font_path == defaults.charset.font_path);
-    require(config.charset.candidates == defaults.charset.candidates);
-    require(config.charset.pixel_size == defaults.charset.pixel_size);
-    require(config.sampling.columns == defaults.sampling.columns);
-    require(std::get<ImageConfig>(config.media_config).output == ImageOutput::Terminal);
-    require(!std::get<ImageConfig>(config.media_config).output_path);
-    const auto custom = parseConfig({"--font", "custom font.ttf", "photo.png",
-        "--font-size", "32", "--columns", "80", "--output", "out.png"});
-    require(std::holds_alternative<Config>(custom));
-    const auto& c = std::get<Config>(custom);
-    require(c.charset.font_path == "custom font.ttf" && c.charset.pixel_size == 32);
-    require(c.sampling.columns == 80 && std::get<ImageConfig>(c.media_config).output == ImageOutput::Png);
-    require(std::get<ImageConfig>(c.media_config).output_path == "out.png");
-    require(std::get<ParsedArguments>(parseArguments({"--help"})).help);
-    // Syntax parsing preserves raw values; business conversion happens later.
-    const auto raw = parseArguments({"a", "--columns", "not-a-number", "--output", ""});
-    require(std::holds_alternative<ParsedArguments>(raw));
-    const auto& arguments = std::get<ParsedArguments>(raw);
-    require(arguments.positional == std::vector<std::string>{"a"});
-    require(arguments.options.at("columns") == "not-a-number");
-    require(arguments.options.at("output")->empty());
-    const auto unresolved = buildParsedConfig(std::get<ParsedArguments>(
-        parseArguments({"a", "--output", "out.png"})));
-    require(std::get<ImageConfig>(unresolved.media_config).output_path == "out.png");
-    const auto out_of_range = buildParsedConfig(std::get<ParsedArguments>(
-        parseArguments({"a", "--columns", "0"})));
-    require(out_of_range.sampling.columns == 0);
-    require(std::holds_alternative<ParsedArguments>(parseArguments({"a", "b"})));
-    require(std::get<Config>(parseConfig({"--", "--photo.png"})).input_path == "--photo.png");
-    for (const auto& args : std::vector<std::vector<std::string>>{
-        {}, {""}, {"a", "b"}, {"--help", "a"}, {"a", "--bad"},
-        {"a", "--font"}, {"a", "--font", ""}, {"a", "--font", "--columns", "12"},
-        {"a", "--columns", "12x"}, {"a", "--columns", "-1"},
-        {"a", "--columns", "0"}, {"a", "--columns", "4097"},
-        {"a", "--columns", "99999999999999999999999999999"},
-        {"a", "--font-size", "0"}, {"a", "--font-size", "257"},
-        {"a", "--format", "txt"}, {"a", "--format", "png"},
-        {"a", "-o="}, {"a", "-o", ""}, {"a", "-o", "-"},
-        {"a", "--output", "out.jpg"}, {"a", "--output", "out"},
-        {"a", "--output", "out.jpg", "--format", "png"},
-        {"a", "--output", "out.xyz"},
-        {"a", "--format", "terminal", "--output", "out.png"},
-        {"a", "--output", "out.png", "--format", "terminal"},
-        {"a", "--format", "png", "--output", "-"},
-        {"a", "--format", "png", "--output", ""},
-        {"a", "--columns", "12", "--columns", "13"}}) {
-        const auto result = parseConfig(args);
-        require(std::holds_alternative<ParseError>(result));
-        require(!std::get<ParseError>(result).message.empty());
-    }
-    auto direct = defaults;
-    direct.input_path = "photo.png";
-    std::get<ImageConfig>(direct.media_config).output_path = "preview.PNG";
-    const auto resolved = resolveConfig(direct);
-    require(std::get<ImageConfig>(resolved.media_config).output == ImageOutput::Png);
-    require(std::get<ImageConfig>(resolveConfig(resolved).media_config).output == ImageOutput::Png);
-    require(std::get<ImageConfig>(direct.media_config).output == ImageOutput::Terminal);
-    auto invalid = defaults;
-    invalid.input_path = "a";
-    invalid.sampling.columns = 0;
-    bool rejected = false;
-    try { validateConfig(invalid); }
-    catch (const std::invalid_argument&) { rejected = true; }
-    require(rejected);
+    run("Flag bool and string retrieval", [] {
+        ArgParser parser;
+        parser.add_argument("help", "h", ArgType::Flag);
+        parser.Parse({"-h"});
+        require(parser.has("help") && parser.has("h"));
+        require(parser.get<bool>("help"));
+        require(parser.get<std::string>("help") == "true");
+    });
+    run("bool defaults do not mark arguments as provided", [] {
+        ArgParser parser;
+        parser.add_argument("enabled", std::nullopt, ArgType::Flag).set_default("true");
+        parser.add_argument("disabled", std::nullopt, ArgType::Flag).set_default("false");
+        parser.Parse(std::vector<std::string>{});
+        require(!parser.has("enabled") && parser.get<bool>("enabled"));
+        require(!parser.has("disabled") && !parser.get<bool>("disabled"));
+    });
+    run("missing bool has an exact diagnostic", [] {
+        ArgParser parser;
+        parser.add_argument("help", "h", ArgType::Flag);
+        parser.Parse(std::vector<std::string>{});
+        requireInvalidArgument([&] { parser.get<bool>("help"); }, "Argument not provided: help");
+        requireInvalidArgument([&] { parser.get<bool>("unknown"); }, "Argument not registered: unknown");
+    });
+    run("string specialization preserves spaces", [] {
+        ArgParser parser;
+        parser.add_argument("font", std::nullopt, ArgType::Option);
+        parser.Parse({"--font", " custom font.ttf "});
+        require(parser.get<std::string>("font") == " custom font.ttf ");
+    });
+    run("empty positional default stays absent", [] {
+        ArgParser parser;
+        parser.add_argument("input").set_default("");
+        parser.Parse(std::vector<std::string>{});
+        require(!parser.has("input") && parser.get<std::string>("input").empty());
+    });
+    run("required option is not satisfied by a default", [] {
+        ArgParser parser;
+        parser.add_argument("output", "o", ArgType::Option).set_default("default.png").set_required(true);
+        requireInvalidArgument([&] { parser.Parse(std::vector<std::string>{}); },
+                               "Required argument not provided: output");
+    });
+    run("required option accepts alias input", [] {
+        ArgParser parser;
+        parser.add_argument("output", "o", ArgType::Option).set_required(true);
+        parser.Parse({"-o=result.png"});
+        require(parser.has("output") && parser.get<std::string>("output") == "result.png");
+    });
+    run("required Flag can be provided", [] {
+        ArgParser parser;
+        parser.add_argument("confirm", "y", ArgType::Flag).set_required(true);
+        parser.Parse({"-y"});
+        require(parser.has("confirm") && parser.get<bool>("confirm"));
+    });
+    run("mixed positionals and options retain order", [] {
+        ArgParser parser;
+        parser.add_argument("first");
+        parser.add_argument("second");
+        parser.add_argument("count", "c", ArgType::Option);
+        parser.Parse({"one", "-c=12", "two"});
+        require(parser.get<std::string>("first") == "one");
+        require(parser.get<std::string>("second") == "two");
+        require(parser.get<int>("count") == 12);
+    });
+    std::printf("%d/%d cases passed; %d failed\n", total - failures, total, failures);
+    return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
