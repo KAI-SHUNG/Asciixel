@@ -43,6 +43,7 @@ private:
     bool isRegistered(const std::string& name) const;
     void checkRequiredArguments() const;
 
+    static std::vector<std::string> normalizeArgs(int argc, char** argv);
 #ifdef _WIN32
     /**
      * @brief Encode one Windows command-line argument as UTF-8.
@@ -53,8 +54,6 @@ private:
      */
     static std::string              toUtf8(const wchar_t* value);
     static std::vector<std::string> normalizeArgs(int argc, wchar_t** argv);
-#else
-    static std::vector<std::string> normalizeArgs(int argc, char** argv);
 #endif
 
 public:
@@ -106,16 +105,16 @@ public:
     template <typename T>
     T get(const std::string& name) const;
 
+    /**
+     * @brief Parse command-line arguments.
+     */
+    void Parse(int argc, char** argv);
+
 #ifdef _WIN32
     /**
      * @brief Parse command-line arguments (Windows version).
      */
     void Parse(int argc, wchar_t** argv);
-#else
-    /**
-     * @brief Parse command-line arguments.
-     */
-    void Parse(int argc, char** argv);
 #endif
 
     /**

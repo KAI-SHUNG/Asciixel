@@ -49,6 +49,18 @@ void ArgParser::checkRequiredArguments() const
     }
 }
 
+std::vector<std::string> ArgParser::normalizeArgs(int argc, char** argv)
+{
+    std::vector<std::string> args;
+    args.reserve(argc > 1 ? argc - 1 : 0);
+
+    for (int i = 1; i < argc; ++i) {
+        args.emplace_back(argv[i]);
+    }
+
+    return args;
+}
+
 #ifdef _WIN32
 std::string ArgParser::toUtf8(const wchar_t* value)
 {
@@ -77,18 +89,6 @@ std::vector<std::string> ArgParser::normalizeArgs(int argc, wchar_t** argv)
 
     for (int i = 1; i < argc; ++i) {
         args.emplace_back(toUtf8(argv[i]));
-    }
-
-    return args;
-}
-#else
-std::vector<std::string> ArgParser::normalizeArgs(int argc, char** argv)
-{
-    std::vector<std::string> args;
-    args.reserve(argc > 1 ? argc - 1 : 0);
-
-    for (int i = 1; i < argc; ++i) {
-        args.emplace_back(argv[i]);
     }
 
     return args;
@@ -132,6 +132,16 @@ Argument& ArgParser::add_argument(
     return *arg;
 }
 
+bool ArgParser::has(const std::string& name) const
+{
+    if (!isRegistered(name)) {
+        return false;
+    }
+
+    std::string canonical_name = name_to_arg.at(name)->name;
+    return parsed.count(canonical_name) > 0;
+}
+
 void ArgParser::help() const
 {
     std::string usage = "Usage: " + program_name + " [options]";
@@ -156,24 +166,14 @@ void ArgParser::help() const
     }
 }
 
-bool ArgParser::has(const std::string& name) const
-{
-    if (!isRegistered(name)) {
-        return false;
-    }
-
-    std::string canonical_name = name_to_arg.at(name)->name;
-    return parsed.count(canonical_name) > 0;
-}
-
-#ifdef _WIN32
-void ArgParser::Parse(int argc, wchar_t** argv)
+void ArgParser::Parse(int argc, char** argv)
 {
     auto args = normalizeArgs(argc, argv);
     Parse(args);
 }
-#else
-void ArgParser::Parse(int argc, char** argv)
+
+#ifdef _WIN32
+void ArgParser::Parse(int argc, wchar_t** argv)
 {
     auto args = normalizeArgs(argc, argv);
     Parse(args);
