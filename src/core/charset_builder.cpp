@@ -28,11 +28,11 @@ struct Font {
  * @brief Open the first font face and set its rasterization size.
  *
  * @param font_path Font file path accepted by FreeType.
- * @param pixel_size Requested glyph height in pixels.
+ * @param font_size Requested glyph height in pixels.
  *
  * @return Owned library and face handles with the pixel size configured.
  */
-Font loadFont(const std::string& font_path, unsigned pixel_size)
+Font loadFont(const std::string& font_path, unsigned font_size)
 {
     // Initialize FreeType under RAII ownership.
     FT_Library raw_library = nullptr;
@@ -49,7 +49,7 @@ Font loadFont(const std::string& font_path, unsigned pixel_size)
     FaceHandle face(raw_face, FT_Done_Face);
 
     // Configure the pixel size used for metrics and glyph rasterization.
-    if (FT_Set_Pixel_Sizes(face.get(), 0, pixel_size)) {
+    if (FT_Set_Pixel_Sizes(face.get(), 0, font_size)) {
         throw std::runtime_error("Cannot set font size");
     }
 
@@ -115,15 +115,15 @@ RasterizedGlyph copyGlyph(FT_Face face, unsigned char ch)
 /**
  * @brief Build glyph bitmaps, a shared cell layout and sorted coverage values.
  *
- * @param config Font path, pixel size and unique printable ASCII candidates.
+ * @param config Font path, pixel size and unique printable ASCII charset.
  *
  * @return Owned charset sorted by density, then by character code.
  */
 RasterizedCharset CharsetBuilder::buildCharset(const CharsetConfig& config)
 {
-    // Validate the request and prepare the font face once for all candidates.
+    // Validate the request and prepare the font face once for all charset.
     config.validate();
-    Font font = loadFont(config.font_path, config.pixel_size);
+    Font font = loadFont(config.font_path, config.font_size);
     FT_Face face = font.face.get();
     RasterizedCharset charset;
 
@@ -139,7 +139,7 @@ RasterizedCharset CharsetBuilder::buildCharset(const CharsetConfig& config)
     FT_Pos advance = 0;
 
     // Rasterize each candidate once and expand the common cell to fit.
-    for (unsigned char ch : config.candidates) {
+    for (unsigned char ch : config.charset) {
         auto glyph = copyGlyph(face, ch);
 
         // Require a shared positive advance for a consistent character grid.
