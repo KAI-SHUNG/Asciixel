@@ -9,103 +9,81 @@
 #include <string>
 #include <vector>
 
-#ifdef _WIN32
-#include <windows.h>
-#endif
+asciixel::ArgParser registerArgs();
 
-namespace {
-
-#ifdef _WIN32
-/**
- * @brief Encode one Windows command-line argument as UTF-8.
- *
- * @param value Non-null, null-terminated UTF-16 argument.
- *
- * @return UTF-8 string without its terminating null byte.
- */
-std::string toUtf8(const wchar_t* value)
-{
-    // Query the required buffer length, including the terminating null byte.
-    const int length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS,
-                                           value, -1, nullptr, 0, nullptr, nullptr);
-    if (length == 0) {
-        throw std::runtime_error("Cannot encode image path as UTF-8");
-    }
-
-    // Encode into owned storage and remove the API's null terminator.
-    std::string utf8(static_cast<std::size_t>(length), '\0');
-    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, value, -1,
-                            utf8.data(), length, nullptr, nullptr)
-        == 0) {
-        throw std::runtime_error("Cannot encode image path as UTF-8");
-    }
-    utf8.pop_back();
-    return utf8;
-}
-#endif
-
-} // namespace
-
-/**
- * @brief Parse CLI options, dispatch image conversion or video playback.
- *
- * @param argc Number of command-line arguments, including the executable.
- * @param argv Argument array; UTF-16 on Windows and native char strings elsewhere.
- *
- * @return 0 on success, 2 for invalid arguments, 1 for failures, 130 on interrupt.
- */
 #ifdef _WIN32
 int wmain(int argc, wchar_t** argv)
 #else
 int main(int argc, char** argv)
 #endif
 {
+    asciixel::ArgParser parser;
     try {
-        // Normalize arguments while excluding the executable name.
-        std::vector<std::string> args;
-        for (int i = 1; i < argc; ++i) {
-#ifdef _WIN32
-            args.push_back(toUtf8(argv[i]));
-#else
-            args.emplace_back(argv[i]);
-#endif
-        }
-
-        // Handle syntax errors and help before building a conversion request.
-        const auto result = asciixel::parseArguments(args);
-        if (const auto* error = std::get_if<asciixel::ParseError>(&result)) {
-            std::cerr << error->message << '\n'
-                      << asciixel::argumentHelp();
-            return 2;
-        }
-        const auto& arguments = std::get<asciixel::ParsedArguments>(result);
-        if (arguments.help) {
-            std::cout << asciixel::argumentHelp();
-            return 0;
-        }
-
-        // Combine the input path with options and resolve shared config rules.
-        if (arguments.positional.size() != 1)
-            throw std::invalid_argument("Exactly one input path is required");
-        auto values = arguments.options;
-        values.emplace("input", arguments.positional.front());
-        const auto config = asciixel::resolveConfig(asciixel::buildConfig(values));
-
-        // Switch to right media type's pipeline
-        if (std::holds_alternative<asciixel::ImageConfig>(config.media_config)) {
-            asciixel::convertImage(config);
-        }
-        else if (std::holds_alternative<asciixel::VideoConfig>(config.media_config)) {
-            return asciixel::playVideo(config) ? 0 : 130;
-        }
-        return 0;
-    }
-    catch (const std::invalid_argument& error) {
-        std::cerr << error.what() << '\n';
-        return 2;
+        parser = registerArgs();
     }
     catch (const std::exception& error) {
-        std::cerr << error.what() << '\n';
+        std::cerr << "Failed to register arguments: " << error.what() << '\n';
         return 1;
     }
+    try {
+        parser.Parse(argc, argv);
+    }
+    catch (const std::exception& error) {
+        std::cerr << "Failed to parse arguments: " << error.what() << '\n';
+        parser.help();
+        return 22;
+    }
+    try {
+        std::cout << "Input: " << parser.get<std::string>("input") << std::endl;
+        std::cout << "Output: " << parser.get<std::string>("output") << std::endl;
+        std::cout << "Font: " << parser.get<std::string>("font") << std::endl;
+        std::cout << "Font size: " << parser.get<int>("font-size") << std::endl;
+        std::cout << "Columns: " << parser.get<int>("column") << std::endl;
+    }
+    catch (const std::exception& error) {
+        std::cerr << "Error retrieving argument values: " << error.what() << '\n';
+        return 1;
+    }
+    // const auto config = asciixel::resolveConfig();
+
+    // Switch to right media type's pipeline
+    // if (std::holds_alternative<asciixel::ImageConfig>(config.media_config)) {
+    // asciixel::convertImage(config);
+    // }
+    // else if (std::holds_alternative<asciixel::VideoConfig>(config.media_config)) {
+    //     return asciixel::playVideo(config) ? 0 : 130;
+    // }
+    return 0;
+}
+
+asciixel::ArgParser registerArgs()
+{
+    asciixel::ArgParser parser;
+    parser.add_argument("help", "h", asciixel::ArgType::Flag)
+        .set_default("false")
+        .set_required(false)
+        .set_description("Display this help message and exit.");
+    parser.add_argument("input", std::nullopt, asciixel::ArgType::Positional)
+        .set_required(true)
+        .set_description("Path to the input image or video file.");
+    parser.add_argument("output", "o", asciixel::ArgType::Option)
+        .set_required(false)
+        .set_description("Path to the output file (PNG or TXT).");
+    parser.add_argument("font", std::nullopt, asciixel::ArgType::Option)
+#ifdef _WIN32
+        .set_default("C:/Windows/Fonts/consola.ttf")
+#else
+        .set_default("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf")
+#endif
+        .set_required(false)
+        .set_description("Path to the font file for ASCII rendering.");
+    parser.add_argument("font-size", std::nullopt, asciixel::ArgType::Option)
+        .set_default("24")
+        .set_required(false)
+        .set_description("Font size in pixels for ASCII rendering.");
+    parser.add_argument("column", "c", asciixel::ArgType::Option)
+        .set_default("100")
+        .set_required(false)
+        .set_description("Number of columns in the output.");
+    return std::move(parser);
 }
