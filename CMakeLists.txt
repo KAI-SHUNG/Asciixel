@@ -40,6 +40,7 @@ add_library(asciixel_core STATIC
 	src/io/frame_normalizer.cpp
 	src/io/png_writer.cpp
 	src/io/text_writer.cpp
+	src/io/terminal_session.cpp
 	src/io/terminal_video_output.cpp
 	src/io/terminal_progress.cpp
 )
@@ -79,8 +80,8 @@ if(BUILD_TESTING)
     add_test(NAME terminal_progress COMMAND test_terminal_progress)
     # This native buffer test requires a console; run it in an interactive terminal.
     if(WIN32)
-        add_executable(test_text_terminal_session tests/test_text_terminal_session.cpp)
-        target_link_libraries(test_text_terminal_session PRIVATE asciixel_core)
+        add_executable(test_terminal_session tests/test_terminal_session.cpp)
+        target_link_libraries(test_terminal_session PRIVATE asciixel_core)
     endif()
     add_executable(test_video_timeline tests/test_video_timeline.cpp)
     target_link_libraries(test_video_timeline PRIVATE asciixel_core)

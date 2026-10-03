@@ -112,6 +112,15 @@ Output extensions are case-insensitive. Existing output files are never overwrit
 ./build/asciixel clip.mp4 --columns 80
 ```
 
+Image stdout and video playback share `io/text_writer`'s `writeText(frame,
+stream)` and the same row serializer used by `writeTextFile(frame, path)`.
+Serialization preserves trailing spaces and LF line endings, uses one row
+buffer, and emits no terminal controls. Static images use
+`writeTextToStdout(frame)`, which restores the Windows stdout mode after writing.
+`io/terminal_session` saves and restores terminal modes, cursor visibility and
+interrupt handling for video. `io/terminal_video_output` alone owns rewinding
+to the preceding frame, flushing and the playback clock.
+
 The video pipeline first decodes and converts every frame with `convertFrame`,
 caching only character frames and playback-relative timestamps in memory.
 Source RGB images are released after each conversion, and the decoder closes
@@ -157,7 +166,7 @@ inactive console buffer to verify row positioning and terminal restoration,
 including interruption of a child playback process:
 
 ```powershell
-./build/test_text_terminal_session.exe ./build/asciixel.exe tests/fixtures/video_bframes.mp4
+./build/test_terminal_session.exe ./build/asciixel.exe tests/fixtures/video_bframes.mp4
 ```
 
 ## Project Structure

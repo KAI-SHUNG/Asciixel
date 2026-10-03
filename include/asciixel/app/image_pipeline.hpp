@@ -39,14 +39,14 @@ void convertImage(const asciixel::Config& config)
     // Render glyph bitmaps only when the selected output requires pixels.
     switch (mediaConfig->output) {
     case asciixel::ImageOutput::Terminal:
-        asciixel::writeAsciiFrame(frame);
+        asciixel::writeTextToStdout(frame);
         break;
     case asciixel::ImageOutput::Png:
         asciixel::writePng(asciixel::renderAscii(frame, charset),
                            *mediaConfig->output_path);
         break;
     case asciixel::ImageOutput::Txt:
-        asciixel::writeAsciiFile(frame, *mediaConfig->output_path);
+        asciixel::writeTextFile(frame, *mediaConfig->output_path);
         break;
     }
 }

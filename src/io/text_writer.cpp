@@ -7,41 +7,13 @@
 #include <memory>
 #include <stdexcept>
 #ifdef _WIN32
-#include <atomic>
 #include <fcntl.h>
 #include <io.h>
 #include <sys/stat.h>
-#include <windows.h>
-#else
-#include <csignal>
-#include <sys/ioctl.h>
-#include <termios.h>
-#include <unistd.h>
 #endif
 
 namespace asciixel {
 namespace {
-
-// Handlers only record interruption; playback performs all cleanup on its thread.
-#ifdef _WIN32
-std::atomic<bool> video_interrupted{false};
-
-BOOL WINAPI handleVideoInterrupt(DWORD event)
-{
-    if (event == CTRL_C_EVENT || event == CTRL_BREAK_EVENT) {
-        video_interrupted.store(true);
-        return TRUE;
-    }
-    return FALSE;
-}
-#else
-volatile std::sig_atomic_t video_interrupted = 0;
-
-void handleVideoInterrupt(int)
-{
-    video_interrupted = 1;
-}
-#endif
 
 /**
  * @brief Check character-frame storage and printable ASCII contents.
@@ -91,195 +63,36 @@ void writeRows(const AsciiFrame& frame, Write write)
 }
 } // namespace
 
-/**
- * @brief Return the cursor to the start of a previously written frame.
- *
- * @param rows Number of output lines since the frame started; zero is a no-op.
- *
- * @return No value; stdout failures throw std::runtime_error.
- */
-void resetCursor(std::size_t rows)
+// Shared by static stdout, video playback and arbitrary output streams.
+// Keeps one row buffer; never constructs or copies a complete text frame.
+void writeText(const AsciiFrame& frame, std::ostream& output)
 {
-    // ANSI treats zero as one, so an empty movement must emit no sequence.
-    if (rows == 0) {
-        return;
-    }
-
-    // Cursor Previous Line moves upward and sets the column to one.
-    // The caller flushes after writing the next frame, keeping both in order.
-    const std::string sequence = "\x1b[" + std::to_string(rows) + "F";
-    std::cout.write(sequence.data(),
-                    static_cast<std::streamsize>(sequence.size()));
-    if (!std::cout) {
-        throw std::runtime_error("Cannot reset terminal cursor");
-    }
-}
-
-struct TextTerminalSession::Impl {
-    bool cursor_hidden = false;
-    bool handler_installed = false;
-#ifdef _WIN32
-    HANDLE output = INVALID_HANDLE_VALUE;
-    DWORD original_mode = 0;
-    CONSOLE_CURSOR_INFO original_cursor{};
-    int original_stdout_mode = -1;
-    bool mode_changed = false;
-    bool cursor_saved = false;
-#else
-    termios original_mode{};
-    bool mode_changed = false;
-    using SignalHandler = void (*)(int);
-    SignalHandler original_handler = SIG_DFL;
-#endif
-
-    // Best-effort restoration must also work after a partially failed constructor.
-    ~Impl()
-    {
-#ifdef _WIN32
-        if (cursor_saved) {
-            SetConsoleCursorInfo(output, &original_cursor);
-        }
-        if (handler_installed) {
-            SetConsoleCtrlHandler(handleVideoInterrupt, FALSE);
-        }
-        if (mode_changed) {
-            SetConsoleMode(output, original_mode);
-        }
-        if (original_stdout_mode != -1) {
-            _setmode(_fileno(stdout), original_stdout_mode);
-        }
-#else
-        if (cursor_hidden) {
-            const char restore[] = "\x1b[?25h";
-            // Bypass a failed ostream so its error state cannot suppress cleanup.
-            const auto ignored = ::write(STDOUT_FILENO, restore, sizeof(restore) - 1);
-            (void)ignored;
-        }
-        if (handler_installed) {
-            std::signal(SIGINT, original_handler);
-        }
-        if (mode_changed) {
-            tcsetattr(STDOUT_FILENO, TCSANOW, &original_mode);
-        }
-#endif
-    }
-};
-
-/**
- * @brief Prepare an interactive terminal for relative-position video output.
- *
- * @return No value; unavailable terminal or mode changes throw runtime_error.
- */
-TextTerminalSession::TextTerminalSession() : impl_(std::make_unique<Impl>())
-{
-#ifdef _WIN32
-    impl_->output = GetStdHandle(STD_OUTPUT_HANDLE);
-    if (!GetConsoleMode(impl_->output, &impl_->original_mode)) {
-        throw std::runtime_error("Video playback requires an interactive terminal");
-    }
-    if (!GetConsoleCursorInfo(impl_->output, &impl_->original_cursor)) {
-        throw std::runtime_error("Cannot read terminal cursor state");
-    }
-    impl_->cursor_saved = true;
-
-    // Process LF as a newline and enable ANSI cursor controls only for video.
-    const DWORD mode = (impl_->original_mode | ENABLE_PROCESSED_OUTPUT |
-                        ENABLE_VIRTUAL_TERMINAL_PROCESSING) &
-                       ~DISABLE_NEWLINE_AUTO_RETURN;
-    if (!SetConsoleMode(impl_->output, mode)) {
-        throw std::runtime_error("Cannot enable terminal cursor controls");
-    }
-    impl_->mode_changed = true;
-    impl_->original_stdout_mode = _setmode(_fileno(stdout), _O_BINARY);
-    if (impl_->original_stdout_mode == -1) {
-        throw std::runtime_error("Cannot set video stdout to binary mode");
-    }
-    video_interrupted.store(false);
-    if (!SetConsoleCtrlHandler(handleVideoInterrupt, TRUE)) {
-        throw std::runtime_error("Cannot install video interrupt handler");
-    }
-#else
-    if (!isatty(STDOUT_FILENO) ||
-        tcgetattr(STDOUT_FILENO, &impl_->original_mode) != 0) {
-        throw std::runtime_error("Video playback requires an interactive terminal");
-    }
-    auto mode = impl_->original_mode;
-    mode.c_oflag |= OPOST | ONLCR;
-    mode.c_oflag &= ~(OCRNL | ONOCR | ONLRET);
-    if (tcsetattr(STDOUT_FILENO, TCSANOW, &mode) != 0) {
-        throw std::runtime_error("Cannot enable terminal newline processing");
-    }
-    impl_->mode_changed = true;
-    video_interrupted = 0;
-    impl_->original_handler = std::signal(SIGINT, handleVideoInterrupt);
-    if (impl_->original_handler == SIG_ERR) {
-        throw std::runtime_error("Cannot install video interrupt handler");
-    }
-#endif
-    impl_->handler_installed = true;
-
-    // Start at column one of the current line; keep the screen and row intact.
-    impl_->cursor_hidden = true;
-    std::cout << "\r\x1b[?25l" << std::flush;
-    if (!std::cout) {
-        throw std::runtime_error("Cannot hide terminal cursor");
-    }
-}
-
-TextTerminalSession::~TextTerminalSession() = default;
-
-/**
- * @brief Query the current visible terminal capacity before writing a frame.
- */
-TerminalSize TextTerminalSession::size() const
-{
-#ifdef _WIN32
-    CONSOLE_SCREEN_BUFFER_INFO info{};
-    if (!GetConsoleScreenBufferInfo(impl_->output, &info)) {
-        throw std::runtime_error("Cannot query terminal dimensions");
-    }
-    return {static_cast<std::size_t>(info.srWindow.Right - info.srWindow.Left + 1),
-            static_cast<std::size_t>(info.srWindow.Bottom - info.srWindow.Top + 1)};
-#else
-    winsize size{};
-    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) != 0) {
-        throw std::runtime_error("Cannot query terminal dimensions");
-    }
-    return {size.ws_col, size.ws_row};
-#endif
-}
-
-// Called outside the handler, including between short slices of a timed wait.
-bool TextTerminalSession::interrupted() const
-{
-#ifdef _WIN32
-    return video_interrupted.load();
-#else
-    return video_interrupted != 0;
-#endif
-}
-
-/**
- * @brief Write a character frame to standard output without ANSI formatting.
- *
- * @param frame Valid printable ASCII frame.
- *
- * @return No value; invalid frames or output failures throw.
- */
-void writeAsciiFrame(const AsciiFrame& frame)
-{
-    // Validate first, then preserve literal LF bytes on Windows.
     validateFrame(frame);
-#ifdef _WIN32
-    if (_setmode(_fileno(stdout), _O_BINARY) == -1)
-        throw std::runtime_error("Cannot set stdout to binary mode");
-#endif
-
-    // Stream rows to stdout and report any stream failure.
-    writeRows(frame, [](const char* bytes, std::size_t size) {
-        std::cout.write(bytes, static_cast<std::streamsize>(size));
+    writeRows(frame, [&](const char* bytes, std::size_t size) {
+        output.write(bytes, static_cast<std::streamsize>(size));
     });
-    if (!std::cout) throw std::runtime_error("Cannot write ASCII frame");
+    if (!output) throw std::runtime_error("Cannot write ASCII text");
+}
+
+void writeTextToStdout(const AsciiFrame& frame)
+{
+#ifdef _WIN32
+    // Scope byte-mode changes to static output. Video owns its mode per session.
+    struct StdoutMode {
+        int previous;
+        StdoutMode() : previous(_setmode(_fileno(stdout), _O_BINARY))
+        {
+            if (previous == -1) throw std::runtime_error("Cannot set stdout to binary mode");
+        }
+        ~StdoutMode() { _setmode(_fileno(stdout), previous); }
+    } mode;
+#endif
+    writeText(frame, std::cout);
+#ifdef _WIN32
+    // Flush while byte mode is still active, including redirected stdout.
+    std::cout.flush();
+    if (!std::cout) throw std::runtime_error("Cannot flush ASCII text");
+#endif
 }
 
 /**
@@ -290,7 +103,7 @@ void writeAsciiFrame(const AsciiFrame& frame)
  *
  * @return No value; validation or file errors throw an exception.
  */
-void writeAsciiFile(const AsciiFrame& frame, const std::string& path)
+void writeTextFile(const AsciiFrame& frame, const std::string& path)
 {
     // Validate contents before attempting to create the destination.
     validateFrame(frame);

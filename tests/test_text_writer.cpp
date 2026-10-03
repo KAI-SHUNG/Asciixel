@@ -5,6 +5,10 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
 
 namespace {
 
@@ -26,65 +30,48 @@ private:
     std::streambuf* previous_;
 };
 
-void resetsOnlyWhenRequested()
+void writesToAnyStream()
 {
-    CaptureStdout output;
+    std::ostringstream output;
+    CaptureStdout stdout_output;
     asciixel::AsciiFrame frame(3, 2);
     const std::string characters = "A  #. ";
-    for (std::size_t i = 0; i < characters.size(); ++i) {
+    for (std::size_t i = 0; i < characters.size(); ++i)
         frame.pixels[i].character = characters[i];
-    }
-
-    // Static image output must contain no cursor controls.
-    asciixel::writeAsciiFrame(frame);
-    if (output.bytes() != "A  \n#. \n") {
-        throw std::runtime_error("Static stdout bytes changed");
-    }
-
-    // No previous frame means no movement; ANSI parameter zero would move once.
-    asciixel::resetCursor(0);
-    if (output.bytes() != "A  \n#. \n") {
-        throw std::runtime_error("Zero rows must not move the cursor");
-    }
-
-    // Move relative to the preceding frame, then reuse the same text writer.
-    asciixel::resetCursor(frame.height);
-    asciixel::writeAsciiFrame(frame);
-    if (output.bytes() != "A  \n#. \n\x1b[2FA  \n#. \n") {
-        throw std::runtime_error("Relative cursor reset or frame output is incorrect");
-    }
-}
-
-void reportsResetWriteFailure()
-{
-    CaptureStdout output;
-    std::cout.setstate(std::ios::badbit);
+    asciixel::writeText(frame, output);
+    if (output.str() != "A  \n#. \n" || !stdout_output.bytes().empty())
+        throw std::runtime_error("Shared text writer must target only the supplied stream");
+    output.setstate(std::ios::badbit);
     bool rejected = false;
-    try {
-        asciixel::resetCursor(2);
-    }
-    catch (const std::runtime_error&) {
-        rejected = true;
-    }
-    if (!rejected) {
-        throw std::runtime_error("Cursor reset must report output failure");
-    }
+    try { asciixel::writeText(frame, output); }
+    catch (const std::runtime_error&) { rejected = true; }
+    if (!rejected) throw std::runtime_error("Stream write failure must propagate");
 }
 
 } // namespace
 
 int main(int argc, char** argv) {
-    resetsOnlyWhenRequested();
-    reportsResetWriteFailure();
+#ifdef _WIN32
+    {
+        CaptureStdout output;
+        const int previous = _setmode(_fileno(stdout), _O_TEXT);
+        asciixel::AsciiFrame frame(1, 1);
+        frame.pixels[0].character = 'A';
+        asciixel::writeTextToStdout(frame);
+        const int after = _setmode(_fileno(stdout), previous);
+        if (after != _O_TEXT) throw std::runtime_error("Static output must restore stdout mode");
+    }
+#endif
+    writesToAnyStream();
     if (argc != 2) throw std::runtime_error("Expected output path");
     const auto path = std::filesystem::u8path(argv[1]);
     std::filesystem::remove(path);
     asciixel::AsciiFrame frame(3, 2);
     const std::string chars = "A  #. ";
     for (std::size_t i = 0; i < chars.size(); ++i) frame.pixels[i].character = chars[i];
-    asciixel::writeAsciiFile(frame, argv[1]);
+    asciixel::writeTextFile(frame, argv[1]);
     bool rejected = false;
-    try { asciixel::writeAsciiFile(frame, argv[1]); }
+    try { asciixel::writeTextFile(frame, argv[1]); }
     catch (const std::runtime_error&) { rejected = true; }
     if (!rejected) throw std::runtime_error("Existing output must be preserved");
     std::ifstream input(path, std::ios::binary);

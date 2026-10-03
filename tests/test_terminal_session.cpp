@@ -1,4 +1,5 @@
 #include "asciixel/io/text_writer.hpp"
+#include "asciixel/io/terminal_session.hpp"
 #include "asciixel/io/terminal_video_output.hpp"
 #include "asciixel/io/terminal_progress.hpp"
 
@@ -57,7 +58,7 @@ private:
     int saved_fd_;
 };
 
-void verifiesRelativeOutputAndRestoration()
+void verifiesSessionOutputAndRestoration()
 {
     TestConsole console;
     DWORD original_mode = 0;
@@ -66,7 +67,7 @@ void verifiesRelativeOutputAndRestoration()
     require(GetConsoleCursorInfo(console.handle(), &original_cursor), "cannot query cursor");
     require(SetConsoleCursorPosition(console.handle(), COORD{5, 2}), "cannot set initial cursor");
     {
-        asciixel::TextTerminalSession terminal;
+        asciixel::TerminalSession terminal;
         require(terminal.size().columns == 40 && terminal.size().rows == 10,
                 "visible terminal capacity is incorrect");
         asciixel::AsciiFrame frame(3, 2);
@@ -74,23 +75,13 @@ void verifiesRelativeOutputAndRestoration()
         for (std::size_t i = 0; i < characters.size(); ++i) {
             frame.pixels[i].character = characters[i];
         }
-        asciixel::writeAsciiFrame(frame);
+        asciixel::writeText(frame, std::cout);
         std::cout.flush();
         CONSOLE_SCREEN_BUFFER_INFO info{};
         require(GetConsoleScreenBufferInfo(console.handle(), &info), "cannot query position");
         require(info.dwCursorPosition.X == 0 && info.dwCursorPosition.Y == 4,
                 "LF did not return to column one after each video row");
 
-        frame.pixels.front().character = 'Z';
-        asciixel::resetCursor(frame.height);
-        asciixel::writeAsciiFrame(frame);
-        std::cout.flush();
-        char cells[3]{};
-        DWORD count = 0;
-        require(ReadConsoleOutputCharacterA(console.handle(), cells, 3, COORD{0, 2}, &count),
-                "cannot read overwritten frame");
-        require(count == 3 && std::string(cells, 3) == "Z  ",
-                "second frame was not written over the first frame");
     }
     DWORD restored_mode = 0;
     CONSOLE_CURSOR_INFO restored_cursor{};
@@ -101,7 +92,7 @@ void verifiesRelativeOutputAndRestoration()
             "terminal state was not restored on success");
 
     try {
-        asciixel::TextTerminalSession terminal;
+        asciixel::TerminalSession terminal;
         throw std::runtime_error("simulate playback failure");
     }
     catch (const std::runtime_error&) {
@@ -234,7 +225,7 @@ void verifiesInterruptCleanup(const std::string& program, const std::string& vid
 int main(int argc, char** argv)
 {
     try {
-        verifiesRelativeOutputAndRestoration();
+        verifiesSessionOutputAndRestoration();
         verifiesTerminalVideoOutput();
         if (argc == 3) {
             verifiesInterruptCleanup(argv[1], argv[2]);
