@@ -1,6 +1,5 @@
 #include "asciixel/io/video_loader.hpp"
 
-#include <cmath>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -31,11 +30,6 @@ void loadsAllFrames(const std::string& path)
                 "presentation order or time base conversion is incorrect");
         require(frame->duration_us && *frame->duration_us == 200000,
                 "frame duration is incorrect");
-        for (const auto& pixel : frame->image.pixels) {
-            require(std::isfinite(pixel.color.r) &&
-                    pixel.color.r >= 0 && pixel.color.r <= 1,
-                    "decoded pixels are not linear RGB in range");
-        }
         ++count;
     }
     require(count == 5, "delayed frames were lost at EOF");
@@ -62,7 +56,7 @@ void ignoresAudioAndPreservesSourceTime(const std::string& path)
     }
 
     const auto color = first->image.at(0, 0).color;
-    require(color.r > 0.95f && color.g < 0.01f && color.b < 0.01f,
+    require(color.r >= 243 && color.g <= 2 && color.b <= 2,
             "owned red pixels did not survive loader destruction");
 }
 
@@ -73,8 +67,8 @@ void loadsSingleFrame(const std::string& path)
     const auto frame = loader.nextFrame();
     require(frame && frame->image.width == 2 && frame->image.height == 1,
             "single-frame stream failed");
-    require(frame->image.at(0, 0).color.r == 1.0f &&
-            frame->image.at(1, 0).color.g == 1.0f,
+    require(frame->image.at(0, 0).color.r == 255 &&
+            frame->image.at(1, 0).color.g == 255,
             "single-frame pixels changed");
     require(!loader.nextFrame(), "single-frame stream did not finish");
 }

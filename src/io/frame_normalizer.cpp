@@ -1,4 +1,5 @@
 #include "asciixel/io/frame_normalizer.hpp"
+#include "asciixel/core/color_conversion.hpp"
 
 extern "C" {
 #include <libavutil/frame.h>
@@ -7,7 +8,6 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
-#include <cmath>
 #include <cstdint>
 #include <memory>
 #include <stdexcept>
@@ -15,20 +15,6 @@ extern "C" {
 
 namespace asciixel {
 namespace {
-
-/**
- * @brief Decode one eight-bit sRGB channel to linear light.
- *
- * @param channel Encoded channel value in [0, 255].
- *
- * @return Linear channel value in [0, 1].
- */
-float toLinear(std::uint8_t channel)
-{
-    const float value = channel / 255.0f;
-    return value <= 0.04045f ? value / 12.92f
-                           : std::pow((value + 0.055f) / 1.055f, 2.4f);
-}
 
 /**
  * @brief Replace deprecated JPEG pixel format tags without changing pixels.
@@ -52,12 +38,12 @@ AVPixelFormat normalizeJpegFormat(AVPixelFormat format)
 } // namespace
 
 /**
- * @brief Convert decoded pixels to linear RGB and composite transparency.
+ * @brief Convert decoded pixels to sRGB8 and composite transparency in linear light.
  *
  * @param source Decoded frame with valid dimensions, planes and strides.
- * @param background Linear RGB background used for alpha compositing.
+ * @param background sRGB8 background used for alpha compositing.
  *
- * @return Owned linear RGB image with the source dimensions.
+ * @return Owned sRGB8 image with the source dimensions.
  */
 ImageFrame normalizeFrame(const AVFrame& source, Color background)
 {
@@ -107,16 +93,27 @@ ImageFrame normalizeFrame(const AVFrame& source, Color background)
         throw std::runtime_error("Cannot convert image pixels");
     }
 
-    // Decode sRGB channels before blending against the linear background.
+    // Opaque video pixels remain bytes; only transparent pixels need arithmetic.
     ImageFrame image(width, height);
+    const double background_r = srgbToLinear(background.r);
+    const double background_g = srgbToLinear(background.g);
+    const double background_b = srgbToLinear(background.b);
     for (std::size_t i = 0; i < image.pixels.size(); ++i) {
         const auto* pixel = rgba.data() + i * 4;
-        const float alpha = pixel[3] / 255.0f;
-        image.pixels[i].color = {
-            alpha * toLinear(pixel[0]) + (1.0f - alpha) * background.r,
-            alpha * toLinear(pixel[1]) + (1.0f - alpha) * background.g,
-            alpha * toLinear(pixel[2]) + (1.0f - alpha) * background.b,
-        };
+        if (pixel[3] == 255) {
+            image.pixels[i].color = {pixel[0], pixel[1], pixel[2]};
+        }
+        else if (pixel[3] == 0) {
+            image.pixels[i].color = background;
+        }
+        else {
+            const double alpha = pixel[3] / 255.0;
+            image.pixels[i].color = {
+                linearToSrgb(alpha * srgbToLinear(pixel[0]) + (1.0 - alpha) * background_r),
+                linearToSrgb(alpha * srgbToLinear(pixel[1]) + (1.0 - alpha) * background_g),
+                linearToSrgb(alpha * srgbToLinear(pixel[2]) + (1.0 - alpha) * background_b),
+            };
+        }
     }
 
     return image;

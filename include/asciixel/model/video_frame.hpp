@@ -8,7 +8,7 @@
 
 namespace asciixel {
 
-// Owns normalized linear RGB pixels, independent of the decoder's buffers.
+// Owns normalized sRGB8 pixels, independent of the decoder's buffers.
 // Times are in microseconds in the source stream timeline, not rebased to zero.
 // Missing timestamps and nonpositive/unknown durations remain absent.
 struct VideoFrame {

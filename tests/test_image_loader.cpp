@@ -23,11 +23,11 @@ void loadsKnownPngPixels(const std::string& path)
     const auto frame = asciixel::loadImage(path);
     require(frame.width == 2 && frame.height == 1, "PNG dimensions were not preserved");
     require(frame.pixels.size() == 2, "PNG pixel count is incorrect");
-    require(near(frame.at(0, 0).color.r, 1.0f), "first pixel should be red");
+    require(near(frame.at(0, 0).color.r, 255), "first pixel should be red");
     require(near(frame.at(0, 0).color.g, 0.0f), "first pixel should have no green");
     require(near(frame.at(0, 0).color.b, 0.0f), "first pixel should have no blue");
     require(near(frame.at(1, 0).color.r, 0.0f), "second pixel should have no red");
-    require(near(frame.at(1, 0).color.g, 1.0f), "second pixel should be green");
+    require(near(frame.at(1, 0).color.g, 255), "second pixel should be green");
     require(near(frame.at(1, 0).color.b, 0.0f), "second pixel should have no blue");
 }
 

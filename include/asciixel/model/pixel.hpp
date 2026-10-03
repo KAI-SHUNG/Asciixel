@@ -2,6 +2,7 @@
 #define PIXEL_HPP
 
 #include "asciixel/model/color.hpp"
+#include "asciixel/model/linear_color.hpp"
 
 namespace asciixel {
 
@@ -10,7 +11,7 @@ struct ImagePixel {
 };
 
 struct SampledPixel {
-    Color color;
+    LinearColor color;
 };
 
 struct AsciiPixel {

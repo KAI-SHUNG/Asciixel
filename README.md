@@ -71,6 +71,14 @@ duration in microseconds. It returns `std::nullopt` after draining delayed
 frames. Source times are not rebased or synthesized, and audio packets are
 skipped. The CLI does not yet dispatch video input.
 
+`Color` stores encoded sRGB as three `std::uint8_t` channels in `[0, 255]`.
+`ImagePixel` occupies 3 bytes and `AsciiPixel` occupies 4 bytes including its
+character. Loader background colors use the same byte representation.
+Sampling decodes bytes through an sRGB lookup table and averages in linear
+light. The small sampled grid uses `LinearColor` floats in `[0, 1]` until glyph
+matching is complete; final character colors are then encoded back to sRGB8.
+Transparent pixels are composited in linear light before byte storage.
+
 Video pixels currently reuse the image normalizer's sRGB conversion. Video
 color metadata, HDR, rotation and sample aspect ratio handling are not yet
 implemented; correct display of those inputs is not guaranteed.

@@ -139,12 +139,12 @@ Frame decodeImage(AVFormatContext* input)
 } // namespace
 
 /**
- * @brief Load an image and normalize its decoded pixels to linear RGB.
+ * @brief Load an image and normalize its decoded pixels to sRGB8.
  *
  * @param path Input image path accepted by FFmpeg.
- * @param background Linear RGB color used beneath transparent pixels.
+ * @param background sRGB8 color used beneath transparent pixels.
  *
- * @return Owned linear RGB image with transparency composited.
+ * @return Owned sRGB8 image with transparency composited.
  */
 ImageFrame loadImage(const std::string& path, Color background)
 {

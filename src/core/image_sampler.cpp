@@ -1,4 +1,5 @@
 #include "asciixel/core/image_sampler.hpp"
+#include "asciixel/core/color_conversion.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -8,9 +9,9 @@
 namespace asciixel {
 
 /**
- * @brief Average linear RGB over a block using pixel overlap areas.
+ * @brief Decode sRGB and average linear RGB using pixel overlap areas.
  *
- * @param frame Valid source image in linear RGB.
+ * @param frame Valid source image in sRGB8.
  * @param x_start Inclusive left edge in source pixel coordinates.
  * @param y_start Inclusive top edge in source pixel coordinates.
  * @param x_end Exclusive right edge in source pixel coordinates.
@@ -53,9 +54,9 @@ SampledPixel ImageSampler::sampleBlock(const ImageFrame& frame,
             }
 
             const Color color = frame.at(x, y).color;
-            red += static_cast<double>(color.r) * area;
-            green += static_cast<double>(color.g) * area;
-            blue += static_cast<double>(color.b) * area;
+            red += static_cast<double>(srgbToLinear(color.r)) * area;
+            green += static_cast<double>(srgbToLinear(color.g)) * area;
+            blue += static_cast<double>(srgbToLinear(color.b)) * area;
             total_area += area;
         }
     }
@@ -69,7 +70,7 @@ SampledPixel ImageSampler::sampleBlock(const ImageFrame& frame,
 /**
  * @brief Resample an image into a caller-selected character grid.
  *
- * @param frame Source image with dimensions matching its pixel buffer.
+ * @param frame Source sRGB8 image with dimensions matching its pixel buffer.
  * @param new_width Positive number of sample columns.
  * @param new_height Positive number of sample rows.
  *

@@ -14,7 +14,7 @@ namespace asciixel {
 class VideoLoader {
 public:
     explicit VideoLoader(const std::string& path,
-                         Color background = {0.0f, 0.0f, 0.0f});
+                         Color background = {0, 0, 0});
     ~VideoLoader();
     VideoLoader(const VideoLoader&) = delete;
     VideoLoader& operator=(const VideoLoader&) = delete;

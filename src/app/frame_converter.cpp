@@ -6,7 +6,7 @@
 namespace asciixel {
 
 /**
- * @brief Convert one linear RGB image into a character frame synchronously.
+ * @brief Convert one sRGB8 image into a character frame synchronously.
  *
  * @param image Source image with valid dimensions and pixel storage.
  * @param charset Caller-prepared glyphs and shared cell layout.

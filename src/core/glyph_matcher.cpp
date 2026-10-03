@@ -1,4 +1,5 @@
 #include "asciixel/core/glyph_matcher.hpp"
+#include "asciixel/core/color_conversion.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -17,7 +18,7 @@ namespace asciixel {
  *
  * @return Matching ASCII character; equal distances favor the smaller code.
  */
-char GlyphMatcher::matchCharacter(const Color& color,
+char GlyphMatcher::matchCharacter(const LinearColor& color,
                                  const RasterizedCharset& charset,
                                  double minimum_density, double density_range)
 {
@@ -58,7 +59,7 @@ char GlyphMatcher::matchCharacter(const Color& color,
  * @param frame Nonempty sampled frame containing linear RGB colors.
  * @param charset Nonempty glyph set with finite densities in [0, 1].
  *
- * @return Character frame with the sample dimensions and original colors.
+ * @return Character frame with the sample dimensions and sRGB8 colors.
  */
 AsciiFrame GlyphMatcher::match(const SampledFrame& frame,
                               const RasterizedCharset& charset)
@@ -87,14 +88,14 @@ AsciiFrame GlyphMatcher::match(const SampledFrame& frame,
         maximum = std::max(maximum, static_cast<double>(glyph.density));
     }
 
-    // Match each sample while retaining its color for downstream consumers.
+    // Match before quantizing to sRGB8 so rounding cannot change the glyph.
     AsciiFrame result(frame.width, frame.height);
     for (std::size_t y = 0; y < frame.height; ++y) {
         for (std::size_t x = 0; x < frame.width; ++x) {
-            const Color& color = frame.at(x, y).color;
+            const LinearColor& color = frame.at(x, y).color;
             result.at(x, y) = {
                 matchCharacter(color, charset, minimum, maximum - minimum),
-                color};
+                toSrgb(color)};
         }
     }
 

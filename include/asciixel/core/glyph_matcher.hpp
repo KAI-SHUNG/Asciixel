@@ -9,7 +9,7 @@ namespace asciixel {
 
 class GlyphMatcher {
 private:
-    static char matchCharacter(const Color& color, const RasterizedCharset& charset,
+    static char matchCharacter(const LinearColor& color, const RasterizedCharset& charset,
                                double minimum_density, double density_range);
 
 public:

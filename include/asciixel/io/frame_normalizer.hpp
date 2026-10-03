@@ -7,7 +7,7 @@ struct AVFrame;
 
 namespace asciixel {
 
-// Convert decoded pixels to linear RGB and composite over a linear background.
+// Return sRGB8 pixels; composite transparency in linear light over an sRGB8 background.
 ImageFrame normalizeFrame(const AVFrame& source, Color background);
 
 } // namespace asciixel

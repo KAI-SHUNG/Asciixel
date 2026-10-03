@@ -7,8 +7,8 @@
 
 namespace asciixel {
 
-// Pixels are linear RGB. Transparent pixels use the linear RGB background.
-ImageFrame loadImage(const std::string& path, Color background = {0.0f, 0.0f, 0.0f});
+// Pixels and background are sRGB8. Transparency is composited in linear light.
+ImageFrame loadImage(const std::string& path, Color background = {0, 0, 0});
 
 } // namespace asciixel
 

@@ -57,7 +57,7 @@ struct VideoLoader::Impl {
     /**
      * @brief Copy decoded pixels and source presentation timing into owned data.
      *
-     * @return Linear RGB frame with optional source times in microseconds.
+     * @return sRGB8 frame with optional source times in microseconds.
      */
     VideoFrame copyFrame() const
     {
@@ -83,7 +83,7 @@ struct VideoLoader::Impl {
  * @brief Open a local media file and prepare its best video stream for decoding.
  *
  * @param path UTF-8 input path accepted by the FFmpeg file protocol.
- * @param background Linear RGB background for transparent source pixels.
+ * @param background sRGB8 background for transparent source pixels.
  */
 VideoLoader::VideoLoader(const std::string& path, Color background)
     : impl_(std::make_unique<Impl>())
