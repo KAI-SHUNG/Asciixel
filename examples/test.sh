@@ -12,4 +12,8 @@ echo -e "========================= KANT =========================\n\n\n"
 echo -e "========================= CAT =========================\n\n\n"
 ./build/asciixel examples/cat.jpg
 
+echo -e "========================= MOVING BALL =========================\n\n\n"
+
+./build/asciixel examples/video.mp4 --columns 80
+
 echo -e "\n\nRESIZE YOUR TERMINAL TO LOOK WHOLE OUTPUT"

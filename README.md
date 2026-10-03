@@ -12,10 +12,11 @@ Asciixel converts images and videos into ASCII art. **Video is supported.**
 ## Usage
 
 ```bash
-./build/asciixel photo.jpg                         # Display an image as ASCII
-./build/asciixel photo.jpg -o art.png               # Save as PNG
-./build/asciixel photo.jpg -o art.txt               # Save as TXT
-./build/asciixel clip.mp4 --columns 80              # Play a video as ASCII
+./build/asciixel examples/cat.jpg                  # Display an image as ASCII
+./build/asciixel examples/cat.jpg -o art.png        # Save as PNG
+./build/asciixel examples/cat.jpg -o art.txt        # Save as TXT
+./build/asciixel examples/video.mp4 --columns 80   # Play the moving ball (30 fps)
+bash examples/test.sh                             # Run all examples
 ```
 
 Videos require an interactive terminal. Conversion progress is shown before
