@@ -9,7 +9,7 @@ int main(int argc, char** argv) {
     require(argc == 2);
     asciixel::CharsetConfig config{argv[1], 24, " .Agj_"};
     const auto charset = asciixel::CharsetBuilder::buildCharset(config);
-    require(charset.glyphs.size() == config.candidates.size());
+    require(charset.glyphs.size() == config.charset.size());
     const auto& layout = charset.layout;
     require(layout.cell_width > 0 && layout.cell_height > 0);
     require(charset.glyphs.front().character == ' ');
@@ -29,11 +29,11 @@ int main(int argc, char** argv) {
     const auto again = asciixel::CharsetBuilder::buildCharset(config);
     for (std::size_t i = 0; i < charset.glyphs.size(); ++i)
         require(charset.glyphs[i].alpha == again.glyphs[i].alpha);
-    config.pixel_size = 48;
+    config.font_size = 48;
     const auto larger = asciixel::CharsetBuilder::buildCharset(config);
     require(larger.layout.cell_width > layout.cell_width);
     require(larger.layout.cell_height > layout.cell_height);
-    config.pixel_size = 0;
+    config.font_size = 0;
     bool rejected = false;
     try { asciixel::CharsetBuilder::buildCharset(config); }
     catch (const std::invalid_argument&) { rejected = true; }

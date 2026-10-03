@@ -19,21 +19,29 @@ foreach(component avformat avcodec avutil swscale)
         PATHS "${FFMPEG_ROOT}/lib" NO_DEFAULT_PATH REQUIRED)
 endforeach()
 
+add_library(arg_parser INTERFACE)
+target_include_directories(arg_parser INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_compile_features(arg_parser INTERFACE cxx_std_17)
+
 add_library(asciixel_core STATIC
 	src/app/frame_converter.cpp
+	src/app/video_converter.cpp
+	src/app/video_pipeline.cpp
+	src/app/video_player.cpp
+	src/core/video_timeline.cpp
 	src/core/image_sampler.cpp
 	src/core/charset_builder.cpp
 	src/core/glyph_matcher.cpp
 	src/core/grid_layout.cpp
 	src/core/ascii_renderer.cpp
 	src/config/asciixel_config.cpp
-	src/config/config_builder.cpp
-	src/io/arg_parser.cpp
 	src/io/image_loader.cpp
 	src/io/video_loader.cpp
 	src/io/frame_normalizer.cpp
 	src/io/png_writer.cpp
 	src/io/text_writer.cpp
+	src/io/terminal_video_output.cpp
+	src/io/terminal_progress.cpp
 )
 
 target_link_libraries(asciixel_core PRIVATE freetype
@@ -50,7 +58,7 @@ target_include_directories(asciixel_core
 )
 
 add_executable(asciixel src/main.cpp)
-target_link_libraries(asciixel PRIVATE asciixel_core)
+target_link_libraries(asciixel PRIVATE asciixel_core arg_parser)
 if(MINGW)
 	target_link_options(asciixel PRIVATE -municode)
 endif()
@@ -66,6 +74,47 @@ endif()
 include(CTest)
 
 if(BUILD_TESTING)
+    add_executable(test_terminal_progress tests/test_terminal_progress.cpp)
+    target_link_libraries(test_terminal_progress PRIVATE asciixel_core)
+    add_test(NAME terminal_progress COMMAND test_terminal_progress)
+    # This native buffer test requires a console; run it in an interactive terminal.
+    if(WIN32)
+        add_executable(test_text_terminal_session tests/test_text_terminal_session.cpp)
+        target_link_libraries(test_text_terminal_session PRIVATE asciixel_core)
+    endif()
+    add_executable(test_video_timeline tests/test_video_timeline.cpp)
+    target_link_libraries(test_video_timeline PRIVATE asciixel_core)
+    add_test(NAME video_timeline COMMAND test_video_timeline)
+    add_test(NAME video_cli COMMAND ${CMAKE_COMMAND}
+        -DPROGRAM=$<TARGET_FILE:asciixel>
+        -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/video_bframes.mp4
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_video_cli.cmake)
+    add_executable(test_video_player tests/test_video_player.cpp)
+    add_executable(test_video_pipeline tests/test_video_pipeline.cpp)
+    add_executable(test_video_converter tests/test_video_converter.cpp)
+    target_link_libraries(test_video_converter PRIVATE asciixel_core)
+    target_link_libraries(test_video_pipeline PRIVATE asciixel_core)
+    target_link_libraries(test_video_player PRIVATE asciixel_core)
+    add_test(NAME video_player COMMAND test_video_player)
+    if(WIN32 AND FFMPEG_RUNTIME_DLLS)
+        add_custom_command(TARGET test_video_pipeline POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FFMPEG_RUNTIME_DLLS}
+                $<TARGET_FILE_DIR:test_video_pipeline>
+            COMMAND_EXPAND_LISTS)
+        add_custom_command(TARGET test_video_converter POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FFMPEG_RUNTIME_DLLS}
+                $<TARGET_FILE_DIR:test_video_converter>
+            COMMAND_EXPAND_LISTS)
+    endif()
+    if(WIN32 AND EXISTS "C:/Windows/Fonts/consola.ttf" OR
+       UNIX AND EXISTS "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf")
+        add_test(NAME video_pipeline COMMAND test_video_pipeline
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/video_bframes.mp4"
+            "${CMAKE_CURRENT_BINARY_DIR}/pipeline-source.mp4")
+        add_test(NAME video_converter COMMAND test_video_converter
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/video_bframes.mp4"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/video_audio.mp4")
+    endif()
     add_executable(test_video_loader tests/test_video_loader.cpp)
     target_link_libraries(test_video_loader PRIVATE asciixel_core)
     if(WIN32 AND FFMPEG_RUNTIME_DLLS)
@@ -89,7 +138,7 @@ if(BUILD_TESTING)
     target_link_libraries(test_text_writer PRIVATE asciixel_core)
     add_test(NAME text_writer COMMAND test_text_writer "${CMAKE_CURRENT_BINARY_DIR}/text-writer.txt")
     add_executable(test_arg_parser tests/test_arg_parser.cpp)
-    target_link_libraries(test_arg_parser PRIVATE asciixel_core)
+    target_link_libraries(test_arg_parser PRIVATE arg_parser)
     add_test(NAME arg_parser COMMAND test_arg_parser)
 
     add_executable(test_ascii_renderer tests/test_ascii_renderer.cpp)

@@ -1,4 +1,4 @@
-#include "asciixel/io/arg_parser.hpp"
+#include "arg_parser/arg_parser.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -30,7 +30,7 @@ void requireInvalidArgument(F action, const std::string& message) {
 }
 
 void testBasicBehavior() {
-    using namespace asciixel;
+    using namespace arg_parser;
     {
         ArgParser parser;
         parser.add_argument("input").set_required(true);
@@ -169,7 +169,7 @@ void requireRejected(F action) {
 }
 
 int main() {
-    using namespace asciixel;
+    using namespace arg_parser;
     int failures = 0;
     int total = 0;
     auto run = [&](const std::string& name, const std::function<void()>& test) {

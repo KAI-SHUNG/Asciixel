@@ -1,6 +1,8 @@
 # Asciixel
 
-Asciixel is a tool that transforms pixels into asciixels(ASCII pixels)! Now it supports JPG, PNG. More formats will be supported in the future. It can output to terminal or PNG file.
+Asciixel transforms pixels into asciixels (ASCII pixels). It supports static
+JPG/PNG images with terminal, PNG or TXT output, and terminal playback of
+MP4/MOV/M4V H.264 video.
 
 <img src="examples/cat.jpg" width="200" alt="Raw image"/> <img src="examples/cat-ascii.png" width="200" alt="PNG output"/>
 
@@ -62,14 +64,16 @@ Currently, the program uses a default font path(Linux: `/usr/share/fonts/truetyp
 
 ## Supported Arguments
 
-Currently supports static JPG and PNG images, with terminal, PNG, or TXT output. Video is not yet supported.
+Static JPG/PNG images support terminal, PNG or TXT output. MP4/MOV/M4V H.264
+video supports interactive terminal playback; video file export is not supported.
 
 The library provides sequential MP4/MOV H.264 decoding through `VideoLoader`
 in `asciixel/io/video_loader.hpp`. `nextFrame()` returns an owned `VideoFrame`
 containing an `ImageFrame` and optional source presentation timestamp and
 duration in microseconds. It returns `std::nullopt` after draining delayed
 frames. Source times are not rebased or synthesized, and audio packets are
-skipped. The CLI does not yet dispatch video input.
+skipped. The CLI selects video playback for `.mp4`, `.mov` and `.m4v` input
+extensions, case-insensitively, then validates the video stream when opening it.
 
 `Color` stores encoded sRGB as three `std::uint8_t` channels in `[0, 255]`.
 `ImagePixel` occupies 3 bytes and `AsciiPixel` occupies 4 bytes including its
@@ -79,13 +83,13 @@ light. The small sampled grid uses `LinearColor` floats in `[0, 1]` until glyph
 matching is complete; final character colors are then encoded back to sRGB8.
 Transparent pixels are composited in linear light before byte storage.
 
-Video pixels currently reuse the image normalizer's sRGB conversion. Video
+Video pixels currently reuse the image normalizer's sRGB interpretation. Video
 color metadata, HDR, rotation and sample aspect ratio handling are not yet
 implemented; correct display of those inputs is not guaranteed.
 
 | Argument | Default | Description |
 | --- | --- | --- |
-| `<image-path>` | Required | Path to a single input image |
+| `<input-path>` | Required | Path to a single image or supported video |
 | `-o, --output [path]` | Terminal output | Save to a `.png` or `.txt` file; omit the path to create `<input-stem>_asciixel.png` beside the input |
 | `--font <path>` | Platform default, see above | Monospace font file used for glyph calibration |
 | `--font-size <N>` | 24 | Font size in pixels, integer from 1 to 256 |
@@ -100,6 +104,60 @@ Output extensions are case-insensitive. Existing output files are never overwrit
 ./build/asciixel photo.jpg --columns 80
 ./build/asciixel photo.jpg -o art.txt
 ./build/asciixel photo.jpg -o
+```
+
+## Video Playback
+
+```bash
+./build/asciixel clip.mp4 --columns 80
+```
+
+The video pipeline first decodes and converts every frame with `convertFrame`,
+caching only character frames and playback-relative timestamps in memory.
+Source RGB images are released after each conversion, and the decoder closes
+before playback starts. Preparation time delays the start of playback; memory
+usage grows with video duration and character grid size (4 bytes per cell,
+plus frame metadata). No frames are displayed until preparation finishes.
+
+`convertVideo(config)` in `asciixel/app/video_pipeline.hpp` selects the output
+path. `prepareVideo(config)` in `asciixel/app/video_converter.hpp` returns the
+converted `AsciiVideo` cache, or `std::nullopt` on interruption when an
+interruption callback is supplied. Conversion is independent of output type.
+Each cached frame records a playback-relative `timestamp_us` and resolved
+`duration_us`, usable for both real-time scheduling and future file encoding.
+
+`core/video_timeline` resolves timestamps and durations without clocks or I/O.
+`app/video_player` only schedules cached frames through device-independent
+callbacks. `io/terminal_video_output` owns the actual clock, cursor positioning,
+writes, and terminal/interrupt state restoration.
+The MP4 pipeline branch is separate from real-time playback and currently
+reports that export is not implemented; a future exporter will use the ASCII
+renderer and a video writer without waiting for playback deadlines.
+
+Playback reuses the text writer and moves upward by the preceding frame's row
+count before drawing the next frame. It starts on the current terminal line,
+does not clear the screen, and leaves the last displayed frame visible. The
+terminal window size does not restrict playback; frames may wrap or scroll
+when they exceed the window. Redirected stdout and video `-o` requests are rejected.
+
+Conversion displays a progress bar and percentage estimated from the selected video stream duration, plus the number of converted frames. The percentage stays below 100 until decoding and conversion finish. Unknown durations show an activity indicator and frame count. Updates are limited to roughly once per 100 ms, and the progress line is cleared before playback or on cancellation/failure. The reusable `io/terminal_progress` accepts completed/total numeric units and display text without depending on video data.
+
+The playback clock starts after preparation. Frames follow source presentation
+timestamps on a monotonic clock. Missing or
+non-increasing timestamps use the preceding duration, then the source frame
+interval, then 30 fps. No frames are dropped; slow terminal output may delay
+playback. Audio is ignored. Ctrl+C stops preparation or playback with exit code
+130 and restores the cursor and terminal modes. FFmpeg diagnostics are suppressed
+while terminal output is active to keep positioning intact; runtime failures are still
+reported after terminal cleanup.
+
+Run `ctest --test-dir build --output-on-failure` for the automated suite. On
+Windows, this additional test requires an interactive terminal and uses an
+inactive console buffer to verify row positioning and terminal restoration,
+including interruption of a child playback process:
+
+```powershell
+./build/test_text_terminal_session.exe ./build/asciixel.exe tests/fixtures/video_bframes.mp4
 ```
 
 ## Project Structure

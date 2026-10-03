@@ -23,6 +23,12 @@ public:
     // File, demuxing, decoding and normalization failures throw runtime_error.
     std::optional<VideoFrame> nextFrame();
 
+    // Estimated source interval for missing timestamps/durations, in microseconds.
+    std::optional<std::int64_t> nominalFrameDurationUs() const;
+
+    // Selected video stream duration, not the audio/container duration.
+    std::optional<std::int64_t> durationUs() const;
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

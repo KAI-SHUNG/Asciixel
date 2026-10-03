@@ -1,6 +1,6 @@
 #include "arg_parser/arg_parser.hpp"
 #include "asciixel/app/image_pipeline.hpp"
-#include "asciixel/app/video_player.hpp"
+#include "asciixel/app/video_pipeline.hpp"
 #include "asciixel/config/asciixel_config.hpp"
 
 #include <exception>
@@ -104,7 +104,7 @@ int main(int argc, char** argv)
             asciixel::convertImage(config);
         }
         else if (is_video) {
-            return asciixel::playVideo(config) ? 0 : 130;
+            return asciixel::convertVideo(config) ? 0 : 130;
         }
     }
     catch (const std::exception& error) {

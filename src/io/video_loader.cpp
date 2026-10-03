@@ -127,6 +127,33 @@ VideoLoader::VideoLoader(const std::string& path, Color background)
 
 VideoLoader::~VideoLoader() = default;
 
+std::optional<std::int64_t> VideoLoader::durationUs() const
+{
+    const auto* stream = impl_->input->streams[impl_->stream];
+    if (stream->duration == AV_NOPTS_VALUE || stream->duration <= 0) {
+        return std::nullopt;
+    }
+    const auto duration = av_rescale_q(stream->duration, stream->time_base,
+                                     AVRational{1, 1000000});
+    return duration > 0 ? std::optional<std::int64_t>{duration} : std::nullopt;
+}
+
+/**
+ * @brief Estimate one frame's duration from the selected stream's frame rate.
+ *
+ * @return Positive microseconds, or nullopt when no usable rate is available.
+ */
+std::optional<std::int64_t> VideoLoader::nominalFrameDurationUs() const
+{
+    const AVRational rate = av_guess_frame_rate(
+        impl_->input, impl_->input->streams[impl_->stream], nullptr);
+    if (rate.num <= 0 || rate.den <= 0) {
+        return std::nullopt;
+    }
+    const auto interval = av_rescale_q(1, av_inv_q(rate), AVRational{1, 1000000});
+    return interval > 0 ? std::optional<std::int64_t>{interval} : std::nullopt;
+}
+
 /**
  * @brief Decode the next display-order frame, including buffered frames at EOF.
  *
